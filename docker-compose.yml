@@ -1,12 +1,14 @@
 version: "3.9"
 
+# Примечание: BOT_TOKEN должен быть установлен через переменные окружения (.env файл)
+# Не добавляйте его в environment секции для безопасности
+
 services:
   backend:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
     environment:
-      - FLASK_ENV=production
       - DATABASE_URL=postgresql+psycopg2://board_user:board_password@db:5432/board_games
     ports:
       - "8000:8000"
@@ -25,7 +27,6 @@ services:
       context: .
       dockerfile: docker/bot.Dockerfile
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
       - API_BASE_URL=http://backend:8000
       - RATING_SHEET_CSV_URL=${RATING_SHEET_CSV_URL}
     depends_on:

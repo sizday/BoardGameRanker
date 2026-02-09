@@ -1,14 +1,11 @@
-import os
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://board_user:board_password@db:5432/board_games",
-)
+from app.config import config
 
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+DATABASE_URL = config.DATABASE_URL
+
+engine = create_engine(DATABASE_URL, echo=config.DEBUG, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 Base = declarative_base()

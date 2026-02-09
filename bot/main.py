@@ -1,5 +1,4 @@
 import asyncio
-import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -10,10 +9,7 @@ from typing import Dict, Any
 
 from handlers.ranking import router as ranking_router
 from services.import_ratings import import_ratings_from_sheet
-
-API_BASE_URL = os.getenv("API_BASE_URL", "http://backend:8000")
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
-RATING_SHEET_CSV_URL = os.getenv("RATING_SHEET_CSV_URL", "")
+from config import config
 
 async def api_base_url_middleware(
     handler,
@@ -21,7 +17,7 @@ async def api_base_url_middleware(
     data: Dict[str, Any]
 ) -> Any:
     """Middleware для передачи API_BASE_URL в handlers."""
-    data["api_base_url"] = API_BASE_URL
+    data["api_base_url"] = config.API_BASE_URL
     return await handler(event, data)
 
 
@@ -42,8 +38,8 @@ async def on_import_ratings(message: Message):
 
     try:
         imported_count = await import_ratings_from_sheet(
-            api_base_url=API_BASE_URL,
-            sheet_csv_url=RATING_SHEET_CSV_URL,
+            api_base_url=config.API_BASE_URL,
+            sheet_csv_url=config.RATING_SHEET_CSV_URL,
         )
         if imported_count == 0:
             await message.answer("Таблица пуста, нечего импортировать.")
@@ -58,10 +54,10 @@ async def on_import_ratings(message: Message):
 
 
 async def main():
-    if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN is not set")
+    # Валидация конфигурации
+    config.validate()
 
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    bot = Bot(token=config.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
     dp = Dispatcher()
     dp.update.middleware(api_base_url_middleware)
