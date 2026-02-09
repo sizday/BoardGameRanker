@@ -1,0 +1,77 @@
+from dataclasses import dataclass
+from enum import Enum
+from typing import Dict, List, Optional
+
+
+@dataclass
+class Game:
+    id: int
+    name: str
+    bgg_rank: Optional[int] = None
+    niza_games_rank: Optional[int] = None
+    genre: Optional["GameGenre"] = None
+
+
+class GameGenre(str, Enum):
+    STRATEGY = "strategy"
+    FAMILY = "family"
+    PARTY = "party"
+    COOP = "coop"
+    AMERITRASH = "ameri"
+    EURO = "euro"
+    ABSTRACT = "abstract"
+
+
+class FirstTier(str, Enum):
+    BAD = "bad"
+    GOOD = "good"
+    EXCELLENT = "excellent"
+
+
+class SecondTier(str, Enum):
+    SUPER_COOL = "super_cool"
+    COOL = "cool"
+    EXCELLENT = "excellent"
+
+
+@dataclass
+class Rating:
+    user_name: str
+    game_id: int
+    rank: int
+
+
+@dataclass
+class RankedGame:
+    game: Game
+    rank: int
+
+
+@dataclass
+class RankingRequest:
+    games: List[Game]
+    top_n: int = 50
+
+
+@dataclass
+class RankingResult:
+    ranked_games: List[RankedGame]
+
+
+@dataclass
+class FirstTieringState:
+    """
+    Результат первого прохода (плохо / хорошо / отлично).
+    Ключи словаря tiers — это id игры, значения — FirstTier.
+    """
+    games: List[Game]
+    tiers: Dict[int, FirstTier]
+
+
+@dataclass
+class SecondTieringState:
+    """
+    Результат второго прохода (супер круто / круто / отлично) по подмножеству игр.
+    """
+    candidate_game_ids: List[int]
+    tiers: Dict[int, SecondTier]
