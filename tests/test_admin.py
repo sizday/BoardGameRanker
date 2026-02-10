@@ -4,13 +4,18 @@
 """
 import sys
 import os
+from pathlib import Path
+
+# Добавляем корень проекта в sys.path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 def test_admin_functionality():
     """Тестирование функционала админа"""
     print("🛡️  Тестирование функционала админа...")
 
     try:
-        sys.path.append('bot')
+        sys.path.insert(0, str(project_root / 'bot'))
         from config import config
 
         print("✅ Конфигурация бота загружена")
