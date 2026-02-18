@@ -62,6 +62,10 @@ class Config:
     # и могут быть автоматически обновлены при импорте таблицы.
     GAME_UPDATE_DAYS: int = int(os.getenv("GAME_UPDATE_DAYS", "30"))
 
+    # Язык по умолчанию для отображения описаний игр
+    # "ru" - русский (переведенный), "en" - английский (оригинал)
+    DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "ru")
+
 
 class DevelopmentConfig(Config):
     """Конфигурация для разработки"""

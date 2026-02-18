@@ -48,6 +48,9 @@ class BotConfig:
     REQUEST_TIMEOUT: int = int(os.getenv("REQUEST_TIMEOUT", "30"))
     CONNECT_TIMEOUT: int = int(os.getenv("CONNECT_TIMEOUT", "10"))
 
+    # Язык по умолчанию для описаний игр
+    DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "ru")
+
     def validate(self) -> None:
         """Валидация обязательных параметров"""
         if not self.BOT_TOKEN:

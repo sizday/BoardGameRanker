@@ -42,6 +42,16 @@ async def api_base_url_middleware(
     return await handler(event, data)
 
 
+async def default_language_middleware(
+    handler,
+    event,
+    data: Dict[str, Any]
+) -> Any:
+    """Middleware для передачи DEFAULT_LANGUAGE в handlers."""
+    data["default_language"] = config.DEFAULT_LANGUAGE
+    return await handler(event, data)
+
+
 async def on_start(message: Message):
     user_id = message.from_user.id
     user_name = message.from_user.full_name or str(user_id)
@@ -116,6 +126,7 @@ async def main():
 
     dp = Dispatcher()
     dp.update.middleware(api_base_url_middleware)
+    dp.update.middleware(default_language_middleware)
     logger.debug("Middleware registered")
 
     # Команды верхнего уровня

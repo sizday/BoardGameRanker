@@ -15,6 +15,79 @@ logger = logging.getLogger(__name__)
 GAME_UPDATE_DELTA = timedelta(days=config.GAME_UPDATE_DAYS)
 
 
+def save_game_from_bgg_data(
+    session: Session,
+    bgg_data: Dict[str, Any],
+) -> GameModel:
+    """
+    Сохраняет или обновляет игру в БД на основе данных из BGG API.
+
+    :param session: Сессия базы данных
+    :param bgg_data: Данные игры из BGG API
+    :return: Модель игры
+    """
+    game_id = bgg_data.get("id")
+    name = bgg_data.get("name")
+
+    if not game_id or not name:
+        raise ValueError("BGG data must contain 'id' and 'name' fields")
+
+    # Ищем существующую игру по bgg_id или имени
+    game: GameModel | None = (
+        session.query(GameModel)
+        .filter(GameModel.bgg_id == game_id)
+        .one_or_none()
+    )
+
+    if game is None:
+        # Ищем по имени, если bgg_id не найден
+        game = (
+            session.query(GameModel)
+            .filter(GameModel.name == name)
+            .one_or_none()
+        )
+
+    if game is None:
+        # Создаем новую игру
+        game = GameModel(name=name)
+        session.add(game)
+        logger.info(f"Created new game from BGG data: {name} (bgg_id: {game_id})")
+
+    # Обновляем все поля данными из BGG
+    game.bgg_id = game_id
+    game.bgg_rank = bgg_data.get("rank")
+    game.yearpublished = bgg_data.get("yearpublished")
+    game.bayesaverage = bgg_data.get("bayesaverage")
+    game.usersrated = bgg_data.get("usersrated")
+    game.minplayers = bgg_data.get("minplayers")
+    game.maxplayers = bgg_data.get("maxplayers")
+    game.playingtime = bgg_data.get("playingtime")
+    game.minplaytime = bgg_data.get("minplaytime")
+    game.maxplaytime = bgg_data.get("maxplaytime")
+    game.minage = bgg_data.get("minage")
+    game.average = bgg_data.get("average")
+    game.numcomments = bgg_data.get("numcomments")
+    game.owned = bgg_data.get("owned")
+    game.trading = bgg_data.get("trading")
+    game.wanting = bgg_data.get("wanting")
+    game.wishing = bgg_data.get("wishing")
+    game.averageweight = bgg_data.get("averageweight")
+    game.numweights = bgg_data.get("numweights")
+    game.categories = bgg_data.get("categories")
+    game.mechanics = bgg_data.get("mechanics")
+    game.designers = bgg_data.get("designers")
+    game.publishers = bgg_data.get("publishers")
+    game.image = bgg_data.get("image")
+    game.thumbnail = bgg_data.get("thumbnail")
+    game.description = bgg_data.get("description")
+    # description_ru будет заполнен позже через фоновый перевод
+
+    session.flush()
+    logger.info(f"Saved/updated game from BGG data: {name} (bgg_id: {game_id})")
+
+    return game
+
+
 def _parse_genre(value: Any) -> GameGenre | None:
     """
     Приводит строковое значение жанра из таблицы к enum GameGenre, если возможно.

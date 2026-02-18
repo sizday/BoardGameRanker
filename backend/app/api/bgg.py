@@ -35,6 +35,7 @@ class BGGGameDetails(BaseModel):
     image: str | None
     thumbnail: str | None
     description: str | None = None
+    description_ru: str | None = None
     categories: list[str] | None = None
     mechanics: list[str] | None = None
     designers: list[str] | None = None

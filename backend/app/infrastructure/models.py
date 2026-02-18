@@ -47,6 +47,7 @@ class GameModel(Base):
     image = Column(String, nullable=True)
     thumbnail = Column(String, nullable=True)
     description = Column(Text, nullable=True)
+    description_ru = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(

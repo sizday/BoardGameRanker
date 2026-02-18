@@ -352,6 +352,7 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
         "image": image_url,
         "thumbnail": thumb_url,
         "description": description_text,
+        "description_ru": None,  # Будет заполнено позже через перевод
         "categories": _values_from_links("boardgamecategory"),
         "mechanics": _values_from_links("boardgamemechanic"),
         "designers": _values_from_links("boardgamedesigner"),
