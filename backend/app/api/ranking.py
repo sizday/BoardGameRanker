@@ -18,6 +18,16 @@ router = APIRouter()
 class GameItem(BaseModel):
     id: int
     name: str
+    usersrated: int | None = None
+    yearpublished: int | None = None
+    bgg_rank: int | None = None
+    average: float | None = None
+    bayesaverage: float | None = None
+    averageweight: float | None = None
+    minplayers: int | None = None
+    maxplayers: int | None = None
+    playingtime: int | None = None
+    minage: int | None = None
 
 
 class RankGamesRequest(BaseModel):
@@ -63,7 +73,20 @@ async def rank_games_endpoint(request: RankGamesRequest):
 
     return RankGamesResponse(
         ranked_games=[
-            GameItem(id=rg.game.id, name=rg.game.name)
+            GameItem(
+                id=rg.game.id,
+                name=rg.game.name,
+                usersrated=rg.game.usersrated,
+                yearpublished=getattr(rg.game, "yearpublished", None),
+                bgg_rank=getattr(rg.game, "bgg_rank", None),
+                average=getattr(rg.game, "average", None),
+                bayesaverage=getattr(rg.game, "bayesaverage", None),
+                averageweight=getattr(rg.game, "averageweight", None),
+                minplayers=getattr(rg.game, "minplayers", None),
+                maxplayers=getattr(rg.game, "maxplayers", None),
+                playingtime=getattr(rg.game, "playingtime", None),
+                minage=getattr(rg.game, "minage", None),
+            )
             for rg in result.ranked_games
         ]
     )
@@ -84,7 +107,20 @@ async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_
         logger.info(f"Ranking session started: session_id={data['session_id']}, total_games={data.get('total_games', 0)}")
         return RankingStartResponse(
             session_id=data["session_id"],
-            game=GameItem(id=data["game"]["id"], name=data["game"]["name"]),
+            game=GameItem(
+                id=data["game"]["id"],
+                name=data["game"]["name"],
+                usersrated=data["game"].get("usersrated"),
+                yearpublished=data["game"].get("yearpublished"),
+                bgg_rank=data["game"].get("bgg_rank"),
+                average=data["game"].get("average"),
+                bayesaverage=data["game"].get("bayesaverage"),
+                averageweight=data["game"].get("averageweight"),
+                minplayers=data["game"].get("minplayers"),
+                maxplayers=data["game"].get("maxplayers"),
+                playingtime=data["game"].get("playingtime"),
+                minage=data["game"].get("minage"),
+            ),
         )
     except Exception as exc:  # noqa: BLE001
         db.rollback()
@@ -129,11 +165,30 @@ async def ranking_answer_first(
             response_data["next_game"] = GameItem(
                 id=data["next_game"]["id"],
                 name=data["next_game"]["name"],
+                usersrated=data["next_game"].get("usersrated"),
+                yearpublished=data["next_game"].get("yearpublished"),
+                bgg_rank=data["next_game"].get("bgg_rank"),
+                average=data["next_game"].get("average"),
+                bayesaverage=data["next_game"].get("bayesaverage"),
+                averageweight=data["next_game"].get("averageweight"),
+                minplayers=data["next_game"].get("minplayers"),
+                maxplayers=data["next_game"].get("maxplayers"),
+                playingtime=data["next_game"].get("playingtime"),
+                minage=data["next_game"].get("minage"),
             )
 
         if data.get("phase") == "final" and "top" in data:
             response_data["top"] = [
-                GameItem(id=item["id"], name=item["name"])
+                GameItem(
+                    id=item["id"],
+                    name=item["name"],
+                    usersrated=item.get("usersrated"),
+                    yearpublished=item.get("yearpublished"),
+                    bgg_rank=item.get("bgg_rank"),
+                    average=item.get("average"),
+                    bayesaverage=item.get("bayesaverage"),
+                    averageweight=item.get("averageweight"),
+                )
                 for item in data["top"]
             ]
 
@@ -184,11 +239,30 @@ async def ranking_answer_second(
             response_data["next_game"] = GameItem(
                 id=data["next_game"]["id"],
                 name=data["next_game"]["name"],
+                usersrated=data["next_game"].get("usersrated"),
+                yearpublished=data["next_game"].get("yearpublished"),
+                bgg_rank=data["next_game"].get("bgg_rank"),
+                average=data["next_game"].get("average"),
+                bayesaverage=data["next_game"].get("bayesaverage"),
+                averageweight=data["next_game"].get("averageweight"),
+                minplayers=data["next_game"].get("minplayers"),
+                maxplayers=data["next_game"].get("maxplayers"),
+                playingtime=data["next_game"].get("playingtime"),
+                minage=data["next_game"].get("minage"),
             )
 
         if data.get("phase") == "final" and "top" in data:
             response_data["top"] = [
-                GameItem(id=item["id"], name=item["name"])
+                GameItem(
+                    id=item["id"],
+                    name=item["name"],
+                    usersrated=item.get("usersrated"),
+                    yearpublished=item.get("yearpublished"),
+                    bgg_rank=item.get("bgg_rank"),
+                    average=item.get("average"),
+                    bayesaverage=item.get("bayesaverage"),
+                    averageweight=item.get("averageweight"),
+                )
                 for item in data["top"]
             ]
 

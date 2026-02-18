@@ -45,6 +45,15 @@ class RankingService:
                     bgg_rank=gm.bgg_rank,
                     niza_games_rank=gm.niza_games_rank,
                     genre=gm.genre,
+                    usersrated=gm.usersrated,
+                    yearpublished=gm.yearpublished,
+                    average=gm.average,
+                    bayesaverage=gm.bayesaverage,
+                    averageweight=gm.averageweight,
+                    minplayers=gm.minplayers,
+                    maxplayers=gm.maxplayers,
+                    playingtime=gm.playingtime,
+                    minage=gm.minage,
                 )
             )
         logger.info(f"Loaded {len(games)} games for user {user_name}")
@@ -69,6 +78,15 @@ class RankingService:
                 bgg_rank=gm.bgg_rank,
                 niza_games_rank=gm.niza_games_rank,
                 genre=gm.genre,
+                usersrated=gm.usersrated,
+                yearpublished=gm.yearpublished,
+                average=gm.average,
+                bayesaverage=gm.bayesaverage,
+                averageweight=gm.averageweight,
+                minplayers=gm.minplayers,
+                maxplayers=gm.maxplayers,
+                playingtime=gm.playingtime,
+                minage=gm.minage,
             )
             for gm in rows
         }
@@ -106,7 +124,20 @@ class RankingService:
         logger.info(f"Ranking session created: session_id={session.id}, total_games={len(games)}")
         return {
             "session_id": session.id,
-            "game": {"id": first_game.id, "name": first_game.name},
+            "game": {
+                "id": first_game.id,
+                "name": first_game.name,
+                "usersrated": first_game.usersrated,
+                "yearpublished": first_game.yearpublished,
+                "bgg_rank": first_game.bgg_rank,
+                "average": first_game.average,
+                "bayesaverage": first_game.bayesaverage,
+                "averageweight": first_game.averageweight,
+                "minplayers": first_game.minplayers,
+                "maxplayers": first_game.maxplayers,
+                "playingtime": first_game.playingtime,
+                "minage": first_game.minage,
+            },
             "total_games": len(games),
         }
 
@@ -151,7 +182,20 @@ class RankingService:
             logger.debug(f"First tier: next game available: session_id={session_id}, answered={len(tiers)}/{len(ordered_games)}")
             return {
                 "phase": "first_tier",
-                "next_game": {"id": next_game.id, "name": next_game.name},
+                "next_game": {
+                    "id": next_game.id,
+                    "name": next_game.name,
+                    "usersrated": next_game.usersrated,
+                    "yearpublished": next_game.yearpublished,
+                    "bgg_rank": next_game.bgg_rank,
+                    "average": next_game.average,
+                    "bayesaverage": next_game.bayesaverage,
+                    "averageweight": next_game.averageweight,
+                    "minplayers": next_game.minplayers,
+                    "maxplayers": next_game.maxplayers,
+                    "playingtime": next_game.playingtime,
+                    "minage": next_game.minage,
+                },
                 "answered": len(tiers),
                 "total": len(ordered_games),
             }
@@ -183,7 +227,20 @@ class RankingService:
 
         return {
             "phase": "second_tier",
-            "next_game": {"id": first_candidate.id, "name": first_candidate.name},
+            "next_game": {
+                "id": first_candidate.id,
+                "name": first_candidate.name,
+                "usersrated": first_candidate.usersrated,
+                "yearpublished": first_candidate.yearpublished,
+                "bgg_rank": first_candidate.bgg_rank,
+                "average": first_candidate.average,
+                "bayesaverage": first_candidate.bayesaverage,
+                "averageweight": first_candidate.averageweight,
+                "minplayers": first_candidate.minplayers,
+                "maxplayers": first_candidate.maxplayers,
+                "playingtime": first_candidate.playingtime,
+                "minage": first_candidate.minage,
+            },
             "candidates": len(candidate_games),
         }
 
@@ -232,7 +289,20 @@ class RankingService:
             logger.debug(f"Second tier: next game available: session_id={session_id}, answered={len(tiers)}/{len(candidate_games)}")
             return {
                 "phase": "second_tier",
-                "next_game": {"id": next_game.id, "name": next_game.name},
+                "next_game": {
+                    "id": next_game.id,
+                    "name": next_game.name,
+                    "usersrated": next_game.usersrated,
+                    "yearpublished": next_game.yearpublished,
+                    "bgg_rank": next_game.bgg_rank,
+                    "average": next_game.average,
+                    "bayesaverage": next_game.bayesaverage,
+                    "averageweight": next_game.averageweight,
+                    "minplayers": next_game.minplayers,
+                    "maxplayers": next_game.maxplayers,
+                    "playingtime": next_game.playingtime,
+                    "minage": next_game.minage,
+                },
                 "answered": len(tiers),
                 "total": len(candidate_games),
             }
@@ -258,7 +328,17 @@ class RankingService:
         return {
             "phase": "final",
             "top": [
-                {"id": rg.game.id, "name": rg.game.name, "rank": rg.rank}
+                {
+                    "id": rg.game.id,
+                    "name": rg.game.name,
+                    "rank": rg.rank,
+                    "usersrated": rg.game.usersrated,
+                    "yearpublished": rg.game.yearpublished,
+                    "bgg_rank": rg.game.bgg_rank,
+                    "average": rg.game.average,
+                    "bayesaverage": rg.game.bayesaverage,
+                    "averageweight": rg.game.averageweight,
+                }
                 for rg in ranked_games
             ],
         }

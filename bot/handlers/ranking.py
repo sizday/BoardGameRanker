@@ -25,8 +25,14 @@ async def _handle_phase_transition(
     if phase == "first_tier":
         await state.set_state(RankingStates.first_tier)
         game = payload["next_game"]
+        usersrated = game.get("usersrated")
+        usersrated_text = f" (👥 {usersrated})" if usersrated else ""
+        year = game.get("yearpublished")
+        year_text = f" ({year})" if year else ""
+        bgg_rank = game.get("bgg_rank")
+        bgg_text = f"\nBGG: #{bgg_rank}" if bgg_rank else ""
         text = (
-            f"Игра: <b>{game['name']}</b>\n"
+            f"Игра: <b>{game['name']}</b>{year_text}{usersrated_text}{bgg_text}\n"
             f"Отметь, насколько она тебе понравилась."
         )
         await callback.message.edit_text(
@@ -39,9 +45,15 @@ async def _handle_phase_transition(
     elif phase == "second_tier":
         await state.set_state(RankingStates.second_tier)
         game = payload["next_game"]
+        usersrated = game.get("usersrated")
+        usersrated_text = f" (👥 {usersrated})" if usersrated else ""
+        year = game.get("yearpublished")
+        year_text = f" ({year})" if year else ""
+        bgg_rank = game.get("bgg_rank")
+        bgg_text = f"\nBGG: #{bgg_rank}" if bgg_rank else ""
         text = (
             "Отлично! Теперь уточним, какие игры прямо топчик.\n\n"
-            f"Игра: <b>{game['name']}</b>\n"
+            f"Игра: <b>{game['name']}</b>{year_text}{usersrated_text}{bgg_text}\n"
             f"Выбери, насколько она крутая."
         )
         await callback.message.edit_text(
@@ -54,7 +66,17 @@ async def _handle_phase_transition(
     elif phase == "final":
         await state.set_state(RankingStates.final)
         top = payload.get("top", [])
-        lines = [f"{item['rank']}. {item['name']}" for item in top]
+        lines = []
+        for item in top:
+            rank = item.get("rank", "")
+            name = item.get("name", "")
+            usersrated = item.get("usersrated")
+            year = item.get("yearpublished")
+            year_text = f" ({year})" if year else ""
+            if usersrated:
+                lines.append(f"{rank}. {name}{year_text} (👥 {usersrated})")
+            else:
+                lines.append(f"{rank}. {name}{year_text}")
         text = "Твой предварительный топ-50:\n\n" + "\n".join(lines)
         await callback.message.edit_text(text)
     elif phase == "completed":
@@ -131,9 +153,11 @@ async def _send_first_tier_question(
         game = data["game"]
         logger.info(f"Ranking session started: session_id={session_id}, first_game={game['name']}")
 
+        usersrated = game.get("usersrated")
+        usersrated_text = f" (👥 {usersrated})" if usersrated else ""
         text = (
             f"Начинаем формировать твой рейтинг!\n\n"
-            f"Игра: <b>{game['name']}</b>\n"
+            f"Игра: <b>{game['name']}</b>{usersrated_text}\n"
             f"Отметь, насколько она тебе понравилась."
         )
         await message.answer(

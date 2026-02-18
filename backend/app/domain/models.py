@@ -10,6 +10,15 @@ class Game:
     bgg_rank: Optional[int] = None
     niza_games_rank: Optional[int] = None
     genre: Optional["GameGenre"] = None
+    usersrated: Optional[int] = None
+    yearpublished: Optional[int] = None
+    average: Optional[float] = None
+    bayesaverage: Optional[float] = None
+    averageweight: Optional[float] = None
+    minplayers: Optional[int] = None
+    maxplayers: Optional[int] = None
+    playingtime: Optional[int] = None
+    minage: Optional[int] = None
 
 
 class GameGenre(str, Enum):

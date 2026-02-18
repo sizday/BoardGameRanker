@@ -59,20 +59,60 @@ async def cmd_game(message: Message, api_base_url: str) -> None:
 
         name = game.get("name") or "Без названия"
         year = game.get("yearpublished")
+        minplayers = game.get("minplayers")
+        maxplayers = game.get("maxplayers")
+        playingtime = game.get("playingtime")
+        minage = game.get("minage")
         rank = game.get("rank")
+        avg = game.get("average")
         bayes = game.get("bayesaverage")
         users = game.get("usersrated")
+        weight = game.get("averageweight")
+        categories = game.get("categories") or []
+        mechanics = game.get("mechanics") or []
         image = game.get("image")
+        description = game.get("description")
 
         lines = [f"<b>{name}</b>"]
         if year:
             lines.append(f"Год: {year}")
+        if minplayers or maxplayers:
+            if minplayers and maxplayers and minplayers != maxplayers:
+                lines.append(f"Игроки: {minplayers}–{maxplayers}")
+            else:
+                lines.append(f"Игроки: {minplayers or maxplayers}")
+        if playingtime:
+            lines.append(f"Время: ~{playingtime} мин")
+        if minage:
+            lines.append(f"Возраст: {minage}+")
         if rank:
             lines.append(f"Мировой рейтинг BGG: #{rank}")
+        if avg is not None:
+            try:
+                lines.append(f"Оценка (avg): {float(avg):.2f}")
+            except Exception:  # noqa: BLE001
+                pass
         if bayes is not None:
             lines.append(f"Оценка (Bayes avg): {bayes:.2f}")
         if users:
             lines.append(f"Голосов: {users}")
+        if weight is not None:
+            try:
+                lines.append(f"Сложность (weight): {float(weight):.2f}/5")
+            except Exception:  # noqa: BLE001
+                pass
+        if categories:
+            short = ", ".join(categories[:5])
+            lines.append(f"Категории: {short}" + ("…" if len(categories) > 5 else ""))
+        if mechanics:
+            short = ", ".join(mechanics[:5])
+            lines.append(f"Механики: {short}" + ("…" if len(mechanics) > 5 else ""))
+        if description:
+            # Telegram ограничивает длину сообщения; даём короткий фрагмент
+            snippet = description[:350]
+            if len(description) > 350:
+                snippet += "…"
+            lines.append(f"\nОписание: {snippet}")
 
         text = "\n".join(lines)
 

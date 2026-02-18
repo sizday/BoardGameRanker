@@ -3,6 +3,7 @@ import time
 from typing import List, Dict, Any, Optional
 
 import xml.etree.ElementTree as ET
+import html
 
 from app.config import config
 
@@ -251,15 +252,37 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
     year_el = item.find("yearpublished")
     year = year_el.attrib.get("value") if year_el is not None else None
 
+    # Игровые параметры
+    minplayers_el = item.find("minplayers")
+    maxplayers_el = item.find("maxplayers")
+    playingtime_el = item.find("playingtime")
+    minplaytime_el = item.find("minplaytime")
+    maxplaytime_el = item.find("maxplaytime")
+    minage_el = item.find("minage")
+
     stats_el = item.find("statistics/ratings")
     usersrated_el = stats_el.find("usersrated") if stats_el is not None else None
+    average_el = stats_el.find("average") if stats_el is not None else None
     bayesavg_el = stats_el.find("bayesaverage") if stats_el is not None else None
+    numcomments_el = stats_el.find("numcomments") if stats_el is not None else None
+    owned_el = stats_el.find("owned") if stats_el is not None else None
+    trading_el = stats_el.find("trading") if stats_el is not None else None
+    wanting_el = stats_el.find("wanting") if stats_el is not None else None
+    wishing_el = stats_el.find("wishing") if stats_el is not None else None
+    avgweight_el = stats_el.find("averageweight") if stats_el is not None else None
+    numweights_el = stats_el.find("numweights") if stats_el is not None else None
     ranks_parent = stats_el.find("ranks") if stats_el is not None else None
 
     # Описание
     description_el = item.find("description")
     # В XML BGG описание может содержать HTML‑сущности и переводы строк.
-    description_text = description_el.text if description_el is not None else None
+    description_text_raw = description_el.text if description_el is not None else None
+    if description_text_raw:
+        # BGG может отдавать HTML-сущности; приводим к читаемому виду и нормализуем пробелы.
+        description_text = html.unescape(description_text_raw).replace("\r", " ").replace("\n", " ")
+        description_text = " ".join(description_text.split())
+    else:
+        description_text = None
 
     # Изображения
     image_el = item.find("image")
@@ -286,16 +309,53 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
         except ValueError:
             return None
 
+    def _values_from_links(link_type: str) -> List[str]:
+        values: List[str] = []
+        for link_el in item.findall("link"):
+            if link_el.attrib.get("type") != link_type:
+                continue
+            v = link_el.attrib.get("value")
+            if not v:
+                continue
+            values.append(v)
+        # Убираем дубликаты, сохраняя порядок
+        seen: set[str] = set()
+        unique: List[str] = []
+        for v in values:
+            if v in seen:
+                continue
+            seen.add(v)
+            unique.append(v)
+        return unique
+
     return {
         "id": _to_int(game_id),
         "name": name,
         "yearpublished": _to_int(year),
+        "minplayers": _to_int(minplayers_el.attrib.get("value") if minplayers_el is not None else None),
+        "maxplayers": _to_int(maxplayers_el.attrib.get("value") if maxplayers_el is not None else None),
+        "playingtime": _to_int(playingtime_el.attrib.get("value") if playingtime_el is not None else None),
+        "minplaytime": _to_int(minplaytime_el.attrib.get("value") if minplaytime_el is not None else None),
+        "maxplaytime": _to_int(maxplaytime_el.attrib.get("value") if maxplaytime_el is not None else None),
+        "minage": _to_int(minage_el.attrib.get("value") if minage_el is not None else None),
         "rank": world_rank,
+        "average": _to_float(average_el.attrib.get("value") if average_el is not None else None),
         "bayesaverage": _to_float(bayesavg_el.attrib.get("value") if bayesavg_el is not None else None),
         "usersrated": _to_int(usersrated_el.attrib.get("value") if usersrated_el is not None else None),
+        "numcomments": _to_int(numcomments_el.attrib.get("value") if numcomments_el is not None else None),
+        "owned": _to_int(owned_el.attrib.get("value") if owned_el is not None else None),
+        "trading": _to_int(trading_el.attrib.get("value") if trading_el is not None else None),
+        "wanting": _to_int(wanting_el.attrib.get("value") if wanting_el is not None else None),
+        "wishing": _to_int(wishing_el.attrib.get("value") if wishing_el is not None else None),
+        "averageweight": _to_float(avgweight_el.attrib.get("value") if avgweight_el is not None else None),
+        "numweights": _to_int(numweights_el.attrib.get("value") if numweights_el is not None else None),
         "image": image_url,
         "thumbnail": thumb_url,
         "description": description_text,
+        "categories": _values_from_links("boardgamecategory"),
+        "mechanics": _values_from_links("boardgamemechanic"),
+        "designers": _values_from_links("boardgamedesigner"),
+        "publishers": _values_from_links("boardgamepublisher"),
     }
 
 

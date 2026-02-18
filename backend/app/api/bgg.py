@@ -15,11 +15,30 @@ class BGGGameDetails(BaseModel):
     id: int | None
     name: str | None
     yearpublished: int | None
+    minplayers: int | None = None
+    maxplayers: int | None = None
+    playingtime: int | None = None
+    minplaytime: int | None = None
+    maxplaytime: int | None = None
+    minage: int | None = None
     rank: int | None
+    average: float | None = None
     bayesaverage: float | None
     usersrated: int | None
+    numcomments: int | None = None
+    owned: int | None = None
+    trading: int | None = None
+    wanting: int | None = None
+    wishing: int | None = None
+    averageweight: float | None = None
+    numweights: int | None = None
     image: str | None
     thumbnail: str | None
+    description: str | None = None
+    categories: list[str] | None = None
+    mechanics: list[str] | None = None
+    designers: list[str] | None = None
+    publishers: list[str] | None = None
 
 
 class BGGSearchResponse(BaseModel):

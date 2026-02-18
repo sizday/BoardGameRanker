@@ -1,4 +1,4 @@
-from sqlalchemy import JSON, Column, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import relationship
 
 from .db import Base
@@ -21,8 +21,29 @@ class GameModel(Base):
     )
     # Статистика и доп. метаданные из BGG
     yearpublished = Column(Integer, nullable=True)
-    bayesaverage = Column(Integer, nullable=True)
+    bayesaverage = Column(Float, nullable=True)
     usersrated = Column(Integer, nullable=True)
+    # Параметры игры
+    minplayers = Column(Integer, nullable=True)
+    maxplayers = Column(Integer, nullable=True)
+    playingtime = Column(Integer, nullable=True)
+    minplaytime = Column(Integer, nullable=True)
+    maxplaytime = Column(Integer, nullable=True)
+    minage = Column(Integer, nullable=True)
+    # Статистика BGG
+    average = Column(Float, nullable=True)
+    numcomments = Column(Integer, nullable=True)
+    owned = Column(Integer, nullable=True)
+    trading = Column(Integer, nullable=True)
+    wanting = Column(Integer, nullable=True)
+    wishing = Column(Integer, nullable=True)
+    averageweight = Column(Float, nullable=True)
+    numweights = Column(Integer, nullable=True)
+    # Списки (из link-ов BGG)
+    categories = Column(JSON, nullable=True)
+    mechanics = Column(JSON, nullable=True)
+    designers = Column(JSON, nullable=True)
+    publishers = Column(JSON, nullable=True)
     image = Column(String, nullable=True)
     thumbnail = Column(String, nullable=True)
     description = Column(Text, nullable=True)
