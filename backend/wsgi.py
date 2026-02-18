@@ -10,8 +10,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Initialize database
-init_db()
+# Initialize database (создаёт таблицы, если их нет)
+# Миграции Alembic уже применены в start.sh, так что это просто подстраховка
+try:
+    init_db()
+except Exception as e:
+    # Если таблицы уже созданы через миграции, это нормально
+    print(f"Note: Database initialization: {e}")
 
 # Include API router
 app.include_router(api_router, prefix="/api")

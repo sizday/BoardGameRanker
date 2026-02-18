@@ -1,8 +1,5 @@
 version: "3.9"
 
-# Примечание: BOT_TOKEN должен быть установлен через переменные окружения (.env файл)
-# Не добавляйте его в environment секции для безопасности
-
 services:
   backend:
     build:
@@ -39,7 +36,7 @@ services:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Изменён внешний порт на 5433, чтобы избежать конфликта с локальным PostgreSQL
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:

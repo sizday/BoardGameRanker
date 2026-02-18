@@ -11,10 +11,12 @@ COPY backend/ /app/
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Делаем скрипт запуска исполняемым (он уже скопирован через COPY backend/)
+RUN chmod +x /app/start.sh
+
 EXPOSE 8000
 
-# При старте контейнера сначала выполняем миграции Alembic,
-# затем запускаем сервер приложения.
-CMD ["sh", "-c", "cd /app && alembic -c alembic.ini upgrade head && python wsgi.py"]
+# Используем скрипт запуска, который ждёт готовности БД
+CMD ["/app/start.sh"]
 
 
