@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import config
 from app.domain.models import GameGenre
 from app.services.bgg import get_boardgame_details, search_boardgame
-from .models import GameModel, RatingModel
+from .models import GameModel, RatingModel, RankingSessionModel
 
 logger = logging.getLogger(__name__)
 
@@ -287,4 +287,33 @@ def replace_all_from_table(
         f"Import completed: created={games_created}, updated={games_updated}, "
         f"bgg_updated={games_bgg_updated}, ratings_added={ratings_added}"
     )
+
+
+def clear_all_data(session: Session) -> Dict[str, int]:
+    """
+    Удаляет все данные из базы данных.
+
+    Возвращает словарь с количеством удаленных записей по каждой таблице.
+    """
+    logger.info("Starting database cleanup")
+
+    # Удаляем рейтинги (сначала, чтобы не было проблем с foreign keys)
+    ratings_deleted = session.query(RatingModel).delete()
+    logger.info(f"Deleted {ratings_deleted} ratings")
+
+    # Удаляем сессии ранжирования
+    sessions_deleted = session.query(RankingSessionModel).delete()
+    logger.info(f"Deleted {sessions_deleted} ranking sessions")
+
+    # Удаляем игры (последними, так как на них могут ссылаться рейтинги)
+    games_deleted = session.query(GameModel).delete()
+    logger.info(f"Deleted {games_deleted} games")
+
+    logger.info(f"Database cleanup completed: games={games_deleted}, ratings={ratings_deleted}, sessions={sessions_deleted}")
+
+    return {
+        "games_deleted": games_deleted,
+        "ratings_deleted": ratings_deleted,
+        "sessions_deleted": sessions_deleted,
+    }
 

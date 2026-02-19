@@ -12,6 +12,7 @@ from typing import Dict, Any
 from handlers.ranking import router as ranking_router
 from handlers.bgg_game import router as bgg_game_router
 from services.import_ratings import import_ratings_from_sheet
+from services.clear_database import clear_database
 from config import config
 
 # Настройка логирования
@@ -61,9 +62,10 @@ async def on_start(message: Message):
         "/start_ranking — начать формирование рейтинга"
     ]
 
-    # Добавляем команду импорта только для админа
+    # Добавляем команды админа
     if config.is_admin(message.from_user.id):
         commands.insert(0, "/import_ratings — загрузить данные из Google-таблицы")
+        commands.insert(0, "/clear_database — очистить всю базу данных")
         logger.debug(f"Admin commands shown to user {user_name}")
 
     await message.answer(
@@ -110,6 +112,47 @@ async def on_import_ratings(message: Message):
         await message.answer(f"Ошибка при импорте данных: {exc}")
 
 
+async def on_clear_database(message: Message):
+    """
+    Команда для очистки всей базы данных через backend API.
+    Доступна только админу.
+    """
+    user_id = message.from_user.id
+    user_name = message.from_user.full_name or str(user_id)
+
+    # Проверка прав доступа
+    if not config.is_admin(message.from_user.id):
+        logger.warning(f"Non-admin user {user_name} (ID: {user_id}) attempted to clear database")
+        await message.answer("❌ У вас нет прав для выполнения этой команды.")
+        return
+
+    logger.info(f"Admin {user_name} (ID: {user_id}) started database clear")
+
+    try:
+        result = await clear_database(api_base_url=config.API_BASE_URL)
+
+        games_deleted = result.get("games_deleted", 0)
+        ratings_deleted = result.get("ratings_deleted", 0)
+        sessions_deleted = result.get("sessions_deleted", 0)
+
+        logger.info(f"Database cleared successfully by admin {user_name}: games={games_deleted}, ratings={ratings_deleted}, sessions={sessions_deleted}")
+
+        await message.answer(
+            "✅ База данных успешно очищена!\n\n"
+            f"Удалено:\n"
+            f"• Игр: {games_deleted}\n"
+            f"• Рейтингов: {ratings_deleted}\n"
+            f"• Сессий ранжирования: {sessions_deleted}"
+        )
+
+    except RuntimeError as exc:
+        logger.error(f"Runtime error during database clear: {exc}")
+        await message.answer(f"❌ Ошибка при очистке базы данных: {exc}")
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Unexpected error during database clear: {exc}", exc_info=True)
+        await message.answer(f"❌ Неожиданная ошибка при очистке базы данных: {exc}")
+
+
 async def main():
     logger.info("Starting bot...")
     
@@ -132,6 +175,7 @@ async def main():
     # Команды верхнего уровня
     dp.message.register(on_start, CommandStart())
     dp.message.register(on_import_ratings, Command("import_ratings"))
+    dp.message.register(on_clear_database, Command("clear_database"))
     logger.debug("Commands registered")
 
     # Подключаем роутеры
