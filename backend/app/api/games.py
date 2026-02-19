@@ -10,6 +10,7 @@ from app.infrastructure.db import get_db
 from app.infrastructure.models import GameModel
 from app.infrastructure.repositories import save_game_from_bgg_data
 from app.services.translation import translate_game_descriptions_background, translation_service
+from app.infrastructure.models import GameModel
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +126,24 @@ async def search_games_in_db(
     return GamesSearchResponse(games=games)
 
 
+@router.post("/games/fix-translations")
+async def fix_translations(db: Session = Depends(get_db)) -> dict:
+    """
+    Исправляет форматирование существующих русских переводов в базе данных.
+    """
+    logger.info("API request to fix existing translations formatting")
+    try:
+        fixed_count = await translation_service.fix_existing_translations(db)
+        return {
+            "status": "ok",
+            "message": f"Исправлено форматирование для {fixed_count} игр",
+            "fixed_count": fixed_count
+        }
+    except Exception as exc:
+        logger.error(f"Error fixing translations: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка исправления переводов: {exc}")
+
+
 @router.post("/games/save-from-bgg", response_model=GameDetails)
 async def save_game_from_bgg(
     bgg_data: dict,
@@ -157,7 +176,10 @@ async def save_game_from_bgg(
                 if translated_description:
                     game.description_ru = translated_description
                     db.commit()  # Сохраняем перевод
-                    logger.info(f"✅ Translation completed and saved for game: '{game_name}'")
+                    # Перечитываем объект из базы данных, чтобы убедиться, что изменения сохранены
+                    db.refresh(game)
+                    logger.info(f"✅ Translation completed and saved for game: '{game_name}' (desc_ru length: {len(translated_description)})")
+                    logger.debug(f"✅ Game object after translation: description_ru is not None: {game.description_ru is not None}")
                 else:
                     logger.warning(f"❌ Translation failed for game: '{game_name}'")
             except Exception as translation_exc:

@@ -89,6 +89,11 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
                             )
                             save_resp.raise_for_status()
                             logger.info(f"Successfully saved game to database: {game.get('name')}")
+
+                            # После сохранения используем данные из ответа API (уже содержат перевод)
+                            save_data = save_resp.json()
+                            game = save_data  # Обновляем данные игры данными из ответа сохранения
+                            logger.info(f"✅ Using saved game data with translation for: {game.get('name')} (has_ru: {'description_ru' in game and game['description_ru'] is not None})")
                     except Exception as save_exc:
                         logger.warning(f"Failed to save game to database: {save_exc}")
                         # Продолжаем работу, даже если сохранение не удалось

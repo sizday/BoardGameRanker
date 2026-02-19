@@ -63,6 +63,10 @@ class TranslationService:
             )
 
             translated_text = result.text
+
+            # Постобработка: исправляем проблемы с форматированием
+            translated_text = self.fix_text_formatting(translated_text)
+
             translated_length = len(translated_text)
 
             self.translation_count += 1
@@ -82,9 +86,58 @@ class TranslationService:
                         exc_info=True)
             return None
 
+    def fix_text_formatting(self, text: str) -> str:
+        """
+        Исправляет проблемы с форматированием текста после перевода.
+
+        :param text: Текст для исправления
+        :return: Исправленный текст
+        """
+        if not text:
+            return text
+
+        import re
+        # Добавляем пробел после точки, если его нет и следующий символ - буква (кириллица или латиница)
+        text = re.sub(r'\.([А-Яа-яA-Za-z])', r'. \1', text)
+        # Также исправляем другие знаки препинания
+        text = re.sub(r'([!?;:])([А-Яа-яA-Za-z])', r'\1 \2', text)
+
+        return text
+
     async def is_available(self) -> bool:
         """Проверяет доступность сервиса перевода."""
         return self.translator is not None
+
+    async def fix_existing_translations(self, db: Session) -> int:
+        """
+        Исправляет форматирование существующих русских переводов в базе данных.
+
+        :param db: Сессия базы данных
+        :return: Количество исправленных записей
+        """
+        from app.infrastructure.models import GameModel
+
+        logger.info("🔧 Starting to fix existing translation formatting")
+
+        games = db.query(GameModel).filter(GameModel.description_ru.isnot(None)).all()
+        fixed_count = 0
+
+        for game in games:
+            original_text = game.description_ru
+            fixed_text = self.fix_text_formatting(original_text)
+
+            if fixed_text != original_text:
+                game.description_ru = fixed_text
+                fixed_count += 1
+                logger.debug(f"Fixed formatting for game: {game.name}")
+
+        if fixed_count > 0:
+            db.commit()
+            logger.info(f"✅ Fixed formatting for {fixed_count} games")
+        else:
+            logger.info("ℹ️ No games needed formatting fixes")
+
+        return fixed_count
 
     async def translate_game_descriptions_background(self, db: Session) -> None:
         """

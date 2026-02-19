@@ -63,25 +63,44 @@ async def bgg_search(name: str, exact: bool = False, limit: int = 5) -> BGGSearc
             logger.warning(f"Поиск не дал результатов для запроса: name='{name}', exact={exact}")
             return BGGSearchResponse(games=[])
 
-        # Ограничиваем количество игр, для которых загружаем детали
-        games_to_load = min(len(found), limit)
-        logger.info(f"Найдено {len(found)} игр, загружаем детали для первых {games_to_load}...")
-        
-        games: List[BGGGameDetails] = []
-        for idx, item in enumerate(found[:games_to_load], 1):
+        # Загружаем детали для большего количества игр, чтобы иметь данные для сортировки
+        # Берем в 3 раза больше, чем нужно, для лучшей сортировки
+        candidates_limit = min(len(found), limit * 3)
+        logger.info(f"Найдено {len(found)} игр, загружаем детали для {candidates_limit} кандидатов для сортировки...")
+
+        candidates: List[BGGGameDetails] = []
+        for idx, item in enumerate(found[:candidates_limit], 1):
             try:
                 game_id = item.get("id")
                 if not game_id:
                     logger.warning(f"Пропущен item без id: {item}")
                     continue
-                logger.debug(f"Загрузка деталей игры {idx}/{games_to_load}: game_id={game_id}")
+                logger.debug(f"Загрузка деталей игры {idx}/{candidates_limit}: game_id={game_id}")
                 details = get_boardgame_details(game_id)
-                games.append(BGGGameDetails(**details))
+                candidates.append(BGGGameDetails(**details))
             except Exception as e:
                 logger.error(f"Ошибка при загрузке деталей игры game_id={item.get('id')}: {e}", exc_info=True)
                 # Продолжаем обработку остальных игр
 
-        logger.info(f"Успешно загружено {len(games)} игр из {games_to_load} запрошенных")
+        # Сортируем результаты по релевантности:
+        # 1. Сначала игры с точным совпадением названия (без учета регистра)
+        # 2. Затем по мировому рейтингу (меньше число = выше рейтинг)
+        # 3. Наконец по количеству голосов (больше = лучше)
+        def sort_key(game: BGGGameDetails) -> tuple:
+            game_name = (game.name or '').lower()
+            query_name = name.lower()
+            exact_match = game_name == query_name
+            rank = game.rank or 999999  # Если нет рейтинга, ставим в конец
+            users_rated = game.usersrated or 0
+            return (0 if exact_match else 1, rank, -users_rated)  # exact_match первым, затем лучший рейтинг, затем больше голосов
+
+        candidates_sorted = sorted(candidates, key=sort_key)
+        logger.info(f"Результаты отсортированы по релевантности. Первый результат: '{candidates_sorted[0].name}' (rank: {candidates_sorted[0].rank})")
+
+        # Возвращаем только запрошенное количество лучших результатов
+        games = candidates_sorted[:limit]
+        logger.info(f"Возвращаем {len(games)} лучших результатов из {len(candidates_sorted)} кандидатов")
+
         return BGGSearchResponse(games=games)
     except ValueError as exc:
         logger.error(f"Ошибка конфигурации BGG: {exc}")
