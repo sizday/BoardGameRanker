@@ -3,7 +3,6 @@ from typing import List
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from pydantic import BaseModel
-from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
