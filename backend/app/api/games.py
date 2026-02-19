@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.infrastructure.db import get_db
 from app.infrastructure.models import GameModel
 from app.infrastructure.repositories import save_game_from_bgg_data
-from app.services.translation import translate_game_descriptions_background
+from app.services.translation import translate_game_descriptions_background, translation_service
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,7 @@ async def search_games_in_db(
             image=gm.image,
             thumbnail=gm.thumbnail,
             description=gm.description,
+            description_ru=gm.description_ru,
         ))
 
     return GamesSearchResponse(games=games)
@@ -148,10 +149,20 @@ async def save_game_from_bgg(
 
         logger.info(f"✅ Game saved successfully: '{game_name}' (DB ID: {game.id})")
 
-        # Запускаем фоновый перевод описания, если оно есть
+        # Выполняем синхронный перевод описания, если оно есть и перевода нет
         if game.description and not game.description_ru:
-            logger.info(f"🎯 Scheduling translation for game: '{game_name}' (has description, no Russian translation)")
-            background_tasks.add_task(translate_game_descriptions_background, db)
+            logger.info(f"🎯 Translating game description synchronously: '{game_name}'")
+            try:
+                translated_description = await translation_service.translate_to_russian(game.description)
+                if translated_description:
+                    game.description_ru = translated_description
+                    db.commit()  # Сохраняем перевод
+                    logger.info(f"✅ Translation completed and saved for game: '{game_name}'")
+                else:
+                    logger.warning(f"❌ Translation failed for game: '{game_name}'")
+            except Exception as translation_exc:
+                logger.error(f"❌ Error during translation for game '{game_name}': {translation_exc}")
+                # Не прерываем выполнение, если перевод не удался
         elif not game.description:
             logger.debug(f"ℹ️  Game '{game_name}' has no description to translate")
         else:

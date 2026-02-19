@@ -44,7 +44,6 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
         async with httpx.AsyncClient() as client:
             # Сначала ищем в базе данных
             logger.debug(f"Searching in database first: {query}")
-            await message.answer(f"Ищу игру «{query}»...")
 
             resp = await client.get(
                 f"{api_base_url}/api/games/search",
@@ -64,7 +63,6 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
             else:
                 # Не нашли в БД, ищем на BGG
                 logger.info(f"Game not found in database, searching BGG: {query}")
-                await message.answer("Игра не найдена в базе данных, ищу на BGG...")
 
                 resp = await client.get(
                     f"{api_base_url}/api/bgg/search",
@@ -108,89 +106,83 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
         await message.answer(f"Не удалось получить данные об игре: {exc}")
         return
 
-        # Извлекаем данные игры (работает для обоих источников)
-        name = game.get("name") or "Без названия"
-        year = game.get("yearpublished")
-        minplayers = game.get("minplayers")
-        maxplayers = game.get("maxplayers")
-        playingtime = game.get("playingtime")
-        minage = game.get("minage")
-        # Для игр из БД используем bgg_rank, для BGG API - rank
-        rank = game.get("bgg_rank") or game.get("rank")
-        avg = game.get("average")
-        bayes = game.get("bayesaverage")
-        users = game.get("usersrated")
-        weight = game.get("averageweight")
-        categories = game.get("categories") or []
-        mechanics = game.get("mechanics") or []
-        image = game.get("image")
-        description = game.get("description")
+    # Извлекаем данные игры (работает для обоих источников)
+    name = game.get("name") or "Без названия"
+    year = game.get("yearpublished")
+    minplayers = game.get("minplayers")
+    maxplayers = game.get("maxplayers")
+    playingtime = game.get("playingtime")
+    minage = game.get("minage")
+    # Для игр из БД используем bgg_rank, для BGG API - rank
+    rank = game.get("bgg_rank") or game.get("rank")
+    avg = game.get("average")
+    bayes = game.get("bayesaverage")
+    users = game.get("usersrated")
+    weight = game.get("averageweight")
+    categories = game.get("categories") or []
+    mechanics = game.get("mechanics") or []
+    image = game.get("image")
+    description = game.get("description")
 
-        # Выбираем описание в зависимости от языка
-        original_lang = "en"
-        if default_language == "ru":
-            description_ru = game.get("description_ru")
-            if description_ru:
-                description = description_ru
-                original_lang = "ru"
-                logger.debug(f"🌍 Using Russian description for game: {name}")
-            else:
-                logger.debug(f"🌍 No Russian description available for game: {name}, using English")
-
-        logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank}, lang: {original_lang})")
-
-        lines = [f"<b>{name}</b>"]
-        if year:
-            lines.append(f"Год: {year}")
-        if minplayers or maxplayers:
-            if minplayers and maxplayers and minplayers != maxplayers:
-                lines.append(f"Игроки: {minplayers}–{maxplayers}")
-            else:
-                lines.append(f"Игроки: {minplayers or maxplayers}")
-        if playingtime:
-            lines.append(f"Время: ~{playingtime} мин")
-        if minage:
-            lines.append(f"Возраст: {minage}+")
-        if rank:
-            lines.append(f"Мировой рейтинг BGG: #{rank}")
-        if avg is not None:
-            try:
-                lines.append(f"Оценка (avg): {float(avg):.2f}")
-            except Exception:  # noqa: BLE001
-                pass
-        if bayes is not None:
-            lines.append(f"Оценка (Bayes avg): {bayes:.2f}")
-        if users:
-            lines.append(f"Голосов: {users}")
-        if weight is not None:
-            try:
-                lines.append(f"Сложность (weight): {float(weight):.2f}/5")
-            except Exception:  # noqa: BLE001
-                pass
-        if categories:
-            short = ", ".join(categories[:5])
-            lines.append(f"Категории: {short}" + ("…" if len(categories) > 5 else ""))
-        if mechanics:
-            short = ", ".join(mechanics[:5])
-            lines.append(f"Механики: {short}" + ("…" if len(mechanics) > 5 else ""))
-        if description:
-            # Telegram ограничивает длину сообщения; даём короткий фрагмент
-            snippet = description[:350]
-            if len(description) > 350:
-                snippet += "…"
-            lines.append(f"\nОписание: {snippet}")
-
-        text = "\n".join(lines)
-
-        if image:
-            await message.answer_photo(photo=image, caption=text)
+    # Выбираем описание в зависимости от языка
+    original_lang = "en"
+    if default_language == "ru":
+        description_ru = game.get("description_ru")
+        if description_ru:
+            description = description_ru
+            original_lang = "ru"
+            logger.debug(f"🌍 Using Russian description for game: {name}")
         else:
-            await message.answer(text)
-    except httpx.HTTPStatusError as exc:
-        logger.error(f"HTTP error searching for game '{query}': {exc.response.status_code}")
-        await message.answer(f"Ошибка при запросе к backend: {exc.response.status_code}")
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"Error searching for game '{query}': {exc}", exc_info=True)
-        await message.answer(f"Не удалось получить данные об игре: {exc}")
+            logger.debug(f"🌍 No Russian description available for game: {name}, using English")
+
+    logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank}, lang: {original_lang})")
+
+    lines = [f"<b>{name}</b>"]
+    if year:
+        lines.append(f"Год: {year}")
+    if minplayers or maxplayers:
+        if minplayers and maxplayers and minplayers != maxplayers:
+            lines.append(f"Игроки: {minplayers}–{maxplayers}")
+        else:
+            lines.append(f"Игроки: {minplayers or maxplayers}")
+    if playingtime:
+        lines.append(f"Время: ~{playingtime} мин")
+    if minage:
+        lines.append(f"Возраст: {minage}+")
+    if rank:
+        lines.append(f"Мировой рейтинг BGG: #{rank}")
+    if avg is not None:
+        try:
+            lines.append(f"Оценка (avg): {float(avg):.2f}")
+        except Exception:  # noqa: BLE001
+            pass
+    if bayes is not None:
+        lines.append(f"Оценка (Bayes avg): {bayes:.2f}")
+    if users:
+        lines.append(f"Голосов: {users}")
+    if weight is not None:
+        try:
+            lines.append(f"Сложность (weight): {float(weight):.2f}/5")
+        except Exception:  # noqa: BLE001
+            pass
+    if categories:
+        short = ", ".join(categories[:5])
+        lines.append(f"Категории: {short}" + ("…" if len(categories) > 5 else ""))
+    if mechanics:
+        short = ", ".join(mechanics[:5])
+        lines.append(f"Механики: {short}" + ("…" if len(mechanics) > 5 else ""))
+    if description:
+        # Telegram ограничивает длину сообщения; даём короткий фрагмент
+        snippet = description[:350]
+        if len(description) > 350:
+            snippet += "…"
+        lines.append(f"\nОписание: {snippet}")
+
+    text = "\n".join(lines)
+
+    if image:
+        await message.answer_photo(photo=image, caption=text)
+    else:
+        await message.answer(text)
 
 

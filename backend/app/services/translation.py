@@ -151,7 +151,8 @@ class TranslationService:
             db.commit()
 
             logger.info("💾 Database changes committed")
-            logger.info("🎉 Background translation completed!"            logger.info(f"📈 Final stats: {total_games} total, "
+            logger.info("🎉 Background translation completed!")
+            logger.info(f"📈 Final stats: {total_games} total, "
                       f"{successful_translations} successful, {failed_translations} failed")
 
         except Exception as e:
