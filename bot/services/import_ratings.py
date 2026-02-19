@@ -122,8 +122,9 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
     # 2: bgg (рейтинг BGG)
     # 3: НизаГамс (рейтинг Niza Games)
     # 4..N: имена пользователей (столбцы рейтингов)
-    user_names: List[str] = [h.strip() for h in header[4:] if h.strip()]
-    logger.info(f"Found {len(user_names)} users in sheet: {user_names}")
+    all_user_names = [h.strip() for h in header[4:] if h.strip()]
+    user_names: List[str] = [h for h in all_user_names if h.lower() != "общий"]
+    # Excluded special users from ratings and user count - removed logging to reduce noise
 
     data_rows: List[Dict] = []
     skipped_rows = 0
@@ -193,7 +194,7 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            logger.info(f"Sending data to backend (attempt {attempt + 1}/{max_retries})...")
+            # Sending data to backend (attempt {attempt + 1}/{max_retries}) - removed logging to reduce noise
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{api_base_url}/api/import-table",
@@ -201,13 +202,12 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
                     timeout=120.0,  # Увеличиваем таймаут для импорта
                 )
                 resp.raise_for_status()
-            logger.info(f"Successfully sent data to backend on attempt {attempt + 1}")
+            # Successfully sent data to backend on attempt {attempt + 1} - removed logging to reduce noise
             break  # Успешно отправили данные
         except Exception as e:
-            logger.warning(f"Failed to send data to backend (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
-                logger.error(f"Failed to send data after {max_retries} attempts")
-                raise RuntimeError(f"Не удалось отправить данные в backend после {max_retries} попыток: {e}")
+                logger.error(f"Не удалось отправить данные в backend после {max_retries} попыток")
+                raise RuntimeError(f"Не удалось отправить данные в backend после {max_retries} попыток")
             time.sleep(2 ** attempt)  # Экспоненциальная задержка
 
     return len(data_rows)

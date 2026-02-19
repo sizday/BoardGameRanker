@@ -238,6 +238,7 @@ def replace_all_from_table(
     - для каждой игры делает запрос к BGG и сохраняет все доступные поля;
     - поле мирового рейтинга (bgg_rank) и сопутствующие метаданные
       всегда подтягиваются по API, а не из таблицы;
+    - локальные поля (niza_games_rank, genre, description_ru) всегда обновляются из таблицы;
     - добавлено управление частотой обновлений через is_forced_update.
 
     Ожидаемый формат rows:
@@ -247,6 +248,7 @@ def replace_all_from_table(
             "bgg_id": int | None,          # (опционально) явный ID на BGG
             "niza_games_rank": int | None,
             "genre": str | None,
+            "description_ru": str | None,  # (опционально) русский перевод описания
             "ratings": { "user_name": int, ... }  # рейтинг 0-10, где 0 = не оценивал
         },
         ...
@@ -319,7 +321,7 @@ def replace_all_from_table(
                 games_updated += 1
                 logger.debug(f"Updating existing game: {name}")
 
-            # Всегда обновляем "локальные" поля из таблицы
+            # Всегда обновляем "локальные" поля из таблицы (niza_games_rank, genre, description_ru)
             niza_rank = row.get("niza_games_rank")
             if niza_rank is not None:
                 try:
@@ -331,6 +333,13 @@ def replace_all_from_table(
                 game.niza_games_rank = None
 
             game.genre = _parse_genre(row.get("genre"))
+
+            # Обновляем русский перевод, если он есть в таблице
+            description_ru = row.get("description_ru")
+            if description_ru is not None and description_ru.strip():
+                game.description_ru = description_ru.strip()
+                logger.debug(f"Updated Russian description for game '{name}' from table")
+            # Если поле пустое или отсутствует, не трогаем существующее значение
 
             # Решаем, нужно ли идти в BGG за свежими данными
             if _should_update_game(game, is_forced_update):
@@ -380,6 +389,11 @@ def replace_all_from_table(
                 try:
                     if not isinstance(user_name, str) or not user_name.strip():
                         logger.warning(f"Invalid user_name for game '{name}': {user_name}")
+                        continue
+
+                    # Пропускаем специального пользователя "Общий" - это не настоящий пользователь
+                    if user_name.strip().lower() == "общий":
+                        logger.debug(f"Skipping special user 'Общий' for game '{name}'")
                         continue
 
                     # rank теперь всегда должен быть числом (0-10), так как логика фильтрации уже применена выше

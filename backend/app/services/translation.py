@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import random
+import time
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -35,11 +37,20 @@ class TranslationService:
         self.error_count = 0
         logger.debug("TranslationService stats initialized: translations=0, errors=0")
 
-    async def translate_to_russian(self, text: str) -> Optional[str]:
+    async def translate_to_russian(
+        self,
+        text: str,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 30.0
+    ) -> Optional[str]:
         """
-        Переводит текст на русский язык.
+        Переводит текст на русский язык с retry-логикой.
 
         :param text: Исходный текст на английском
+        :param max_retries: Максимальное количество попыток
+        :param base_delay: Начальная задержка между попытками (секунды)
+        :param max_delay: Максимальная задержка между попытками (секунды)
         :return: Переведенный текст или None при ошибке
         """
         if not text or not text.strip():
@@ -52,39 +63,52 @@ class TranslationService:
             return None
 
         text_length = len(text)
-        logger.debug(f"Starting translation of text ({text_length} chars)")
+        logger.debug(f"Starting translation of text ({text_length} chars) with {max_retries} max retries")
 
-        try:
-            # Google Translate работает синхронно, но мы запускаем в executor
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None,
-                lambda: self.translator.translate(text, src='en', dest='ru')
-            )
+        for attempt in range(max_retries):
+            try:
+                # Google Translate работает синхронно, но мы запускаем в executor
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: self.translator.translate(text, src='en', dest='ru')
+                )
 
-            translated_text = result.text
+                translated_text = result.text
 
-            # Постобработка: исправляем проблемы с форматированием
-            translated_text = self.fix_text_formatting(translated_text)
+                # Постобработка: исправляем проблемы с форматированием
+                translated_text = self.fix_text_formatting(translated_text)
 
-            translated_length = len(translated_text)
+                translated_length = len(translated_text)
 
-            self.translation_count += 1
-            logger.info(f"✅ Translation successful: {text_length} → {translated_length} chars "
-                       f"(total: {self.translation_count}, errors: {self.error_count})")
+                self.translation_count += 1
+                logger.info(f"✅ Translation successful: {text_length} → {translated_length} chars "
+                           f"(total: {self.translation_count}, errors: {self.error_count})")
 
-            # Логируем первые 100 символов для отладки
-            preview = translated_text[:100] + "..." if len(translated_text) > 100 else translated_text
-            logger.debug(f"Translation preview: {preview}")
+                # Логируем первые 100 символов для отладки
+                preview = translated_text[:100] + "..." if len(translated_text) > 100 else translated_text
+                logger.debug(f"Translation preview: {preview}")
 
-            return translated_text
+                return translated_text
 
-        except Exception as e:
-            self.error_count += 1
-            logger.error(f"❌ Translation failed: {e} "
-                        f"(total: {self.translation_count}, errors: {self.error_count})",
-                        exc_info=True)
-            return None
+            except Exception as e:
+                self.error_count += 1
+
+                if attempt < max_retries - 1:
+                    # Рассчитываем задержку с экспоненциальным ростом и jitter
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    # Добавляем jitter (±25% от задержки) для избежания одновременных повторных попыток
+                    jitter = random.uniform(-0.25 * delay, 0.25 * delay)
+                    actual_delay = max(0.1, delay + jitter)  # Минимум 0.1 секунды
+
+                    logger.warning(f"⚠️  Translation attempt {attempt + 1}/{max_retries} failed: {e} "
+                                  f"Retrying in {actual_delay:.2f}s...")
+                    await asyncio.sleep(actual_delay)
+                else:
+                    logger.error(f"❌ Translation failed after {max_retries} attempts: {e} "
+                                f"(total: {self.translation_count}, errors: {self.error_count})",
+                                exc_info=True)
+                    return None
 
     def fix_text_formatting(self, text: str) -> str:
         """
@@ -178,7 +202,13 @@ class TranslationService:
                 try:
                     logger.info(f"📖 [{i}/{total_games}] Translating game: {game.name} (ID: {game.id})")
 
-                    translated_text = await self.translate_to_russian(game.description)
+                    # Используем retry-логику с увеличенными задержками
+                    translated_text = await self.translate_to_russian(
+                        game.description,
+                        max_retries=5,  # Увеличиваем количество попыток
+                        base_delay=2.0,  # Увеличиваем базовую задержку
+                        max_delay=60.0  # Максимальная задержка 1 минута
+                    )
                     if translated_text:
                         game.description_ru = translated_text
                         successful_translations += 1
@@ -187,8 +217,8 @@ class TranslationService:
                         failed_translations += 1
                         logger.warning(f"⚠️  [{i}/{total_games}] Failed to translate: {game.name}")
 
-                    # Небольшая задержка между запросами, чтобы не превысить лимиты API
-                    await asyncio.sleep(0.5)
+                    # Увеличиваем задержку между запросами для разных игр
+                    await asyncio.sleep(1.0)
 
                     # Логируем прогресс каждые 10 игр
                     if i % 10 == 0:

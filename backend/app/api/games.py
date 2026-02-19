@@ -172,7 +172,12 @@ async def save_game_from_bgg(
         if game.description and not game.description_ru:
             logger.info(f"🎯 Translating game description synchronously: '{game_name}'")
             try:
-                translated_description = await translation_service.translate_to_russian(game.description)
+                translated_description = await translation_service.translate_to_russian(
+                    game.description,
+                    max_retries=3,  # Для синхронных запросов меньше попыток
+                    base_delay=1.0,
+                    max_delay=10.0
+                )
                 if translated_description:
                     game.description_ru = translated_description
                     db.commit()  # Сохраняем перевод
