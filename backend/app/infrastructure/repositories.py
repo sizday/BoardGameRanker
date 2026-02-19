@@ -213,10 +213,18 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
             query_name = name.lower()
             exact_match = candidate_name == query_name
 
+            # Дополнительная проверка: если название кандидата намного длиннее искомого,
+            # это может быть расширение или связанная игра (например, "Expansion for Game Name")
+            name_length_ratio = len(candidate_name) / len(query_name) if query_name else 1
+            is_likely_expansion = name_length_ratio > 2.0 and not exact_match  # Название в 2+ раза длиннее и не точное совпадение
+
             # Определяем приоритет по типу игры - ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет
             game_type = candidate.get("type", "").lower()
             is_base_game = game_type == "boardgame"  # Основная игра имеет приоритет
-            game_type_priority = 0 if is_base_game else 1000  # Большой штраф для расширений
+            # Увеличиваем штраф для расширений и вероятно-расширений
+            game_type_priority = 0 if is_base_game else 1000000  # Огромный штраф для расширений
+            if is_likely_expansion:
+                game_type_priority += 500000  # Дополнительный штраф для вероятно-расширений
 
             rank = candidate.get("rank") or 999999
             users_rated = candidate.get("usersrated") or 0
@@ -232,14 +240,16 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
         best_candidate = candidates_sorted[0]
 
         # Логируем всех кандидатов для диагностики
-        logger.debug(f"Все кандидаты для '{name}' (отсортированы):")
+        logger.info(f"🎯 Выбор лучшего кандидата для '{name}' из {len(candidates)} вариантов:")
         for i, candidate in enumerate(candidates_sorted[:5], 1):  # Показываем топ-5
             game_type = candidate.get("type", "unknown")
             rank = candidate.get("rank", "N/A")
             users_rated = candidate.get("usersrated", 0)
-            logger.debug(f"  {i}. '{candidate.get('name')}' (ID: {candidate.get('id')}, type: {game_type}, rank: {rank}, users: {users_rated})")
+            exact_match_indicator = "✓" if (candidate.get("name") or '').lower() == name.lower() else "✗"
+            sort_key_value = sort_key(candidate)
+            logger.info(f"  {i}. [{exact_match_indicator}] '{candidate.get('name')}' (ID: {candidate.get('id')}, Type: {game_type}, Rank: {rank}, Users: {users_rated}) | Sort key: {sort_key_value}")
 
-        logger.info(f"Выбран лучший кандидат для '{name}': '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, type: {best_candidate.get('type')}, rank: {best_candidate.get('rank')})")
+        logger.info(f"✅ Выбран кандидат: '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, Type: {best_candidate.get('type')}, Rank: {best_candidate.get('rank')})")
 
         return best_candidate
 
