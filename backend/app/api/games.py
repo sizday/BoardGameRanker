@@ -1,5 +1,6 @@
 import logging
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from pydantic import BaseModel

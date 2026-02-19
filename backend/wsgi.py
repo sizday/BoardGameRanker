@@ -1,47 +1,75 @@
-from fastapi import FastAPI
-from uvicorn import run
+print("🚀 STARTING WSGI.PY", flush=True)
 
-from app.api.routes import router as api_router
-from app.infrastructure.db import init_db
-from app.config import config
-from app.utils.logging import setup_logging, get_logger
+from fastapi import FastAPI, Request
+import logging
+from typing import List, Optional, Callable
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-# Настройка логирования
-setup_logging()
+from app.infrastructure.db import get_db
+from app.infrastructure.repositories import replace_all_from_table
+from app.services.translation import translate_game_descriptions_background
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Board Game Ranker API",
-    description="API for ranking board games",
-    version="1.0.0",
-)
+app = FastAPI(title="Board Game Ranker API")
 
-logger.info("FastAPI application created")
+print("✅ FASTAPI APP CREATED", flush=True)
 
-# Initialize database (создаёт таблицы, если их нет)
-# Миграции Alembic уже применены в start.sh, так что это просто подстраховка
-try:
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("Database initialization completed successfully")
-except Exception as e:
-    # Если таблицы уже созданы через миграции, это нормально
-    logger.warning(f"Database initialization note: {e}")
+class ImportTableRequest(BaseModel):
+    rows: List[dict]
+    is_forced_update: bool = False
 
-# Include API router
-app.include_router(api_router, prefix="/api")
-logger.info("API router included")
+class ImportTableResponse(BaseModel):
+    status: str
+    games_imported: int = 0
+    message: str = ""
 
+@app.post("/api/import-table")
+async def import_table(request_data: dict):
+    print("🎯 IMPORT-TABLE ENDPOINT CALLED!", flush=True)
+    print(f"🔍 REQUEST_DATA TYPE: {type(request_data)}", flush=True)
+    print(f"🔍 REQUEST_DATA: {request_data}", flush=True)
+    try:
+        """Import games data from table to database."""
+        rows = request_data.get('rows', [])
+        print(f"📝 REQUEST: {len(rows)} rows", flush=True)
+
+        if rows:
+            sample_ratings = rows[0].get('ratings', {})
+            print(f"📊 SAMPLE RATINGS: {list(sample_ratings.keys())}", flush=True)
+
+        print("🔄 CALLING replace_all_from_table...", flush=True)
+        from app.infrastructure.db import get_db
+        from sqlalchemy.orm import Session
+        db: Session = next(get_db())
+        games_imported = replace_all_from_table(
+            session=db,
+            rows=rows,
+            is_forced_update=False,
+            progress_callback=None,
+        )
+        print(f"✅ replace_all_from_table returned: {games_imported}", flush=True)
+
+        return {
+            "status": "success",
+            "games_imported": games_imported,
+            "message": f"Successfully imported {games_imported} games"
+        }
+
+    except Exception as e:
+        print(f"❌ IMPORT FAILED: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
+
+print("✅ ENDPOINT REGISTERED", flush=True)
 
 @app.get("/health")
-async def health_check():
-    logger.debug("Health check requested")
+def health():
     return {"status": "ok"}
 
-
-if __name__ == "__main__":
-    logger.info(f"Starting server on {config.HOST}:{config.PORT}")
-    run(app, host=config.HOST, port=config.PORT)
-
-
+# Start the server
+import uvicorn
+uvicorn.run(app, host="0.0.0.0", port=8000)

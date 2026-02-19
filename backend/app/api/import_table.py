@@ -12,6 +12,8 @@ from app.services.translation import translate_game_descriptions_background
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+logger.critical("🚨 IMPORT_TABLE MODULE LOADED")
+print("📊 IMPORT_TABLE MODULE LOADED", flush=True)
 
 
 class ImportTableRequest(BaseModel):
@@ -34,13 +36,16 @@ async def import_table(
     db: Session = Depends(get_db),
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
 ):
+    logger.critical("🚀🚀🚀 IMPORT_TABLE FUNCTION CALLED! 🚀🚀🚀")
     """Import games data from table to database."""
-    logger.info(f"Import table request: {len(request.rows)} rows, forced_update={request.is_forced_update}")
+    logger.error(f"🚀 IMPORT STARTED: {len(request.rows)} rows, forced_update={request.is_forced_update}")
 
     # Логируем структуру данных для диагностики ошибок
     if request.rows:
-        logger.debug(f"Sample row: {request.rows[0]}")
-        logger.debug(f"Total rows to process: {len(request.rows)}")
+        sample_ratings = request.rows[0].get('ratings', {})
+        logger.error(f"📊 Sample ratings keys: {list(sample_ratings.keys())}")
+        logger.error(f"📊 Contains 'общий': {'общий' in sample_ratings}")
+        logger.error(f"📊 Total rows to process: {len(request.rows)}")
 
     try:
         replace_all_from_table(

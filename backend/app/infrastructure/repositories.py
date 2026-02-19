@@ -254,7 +254,7 @@ def replace_all_from_table(
     *,
     is_forced_update: bool = False,
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> None:
+) -> int:
     """
     Обновляет данные об играх и оценках на основе табличных данных.
 
@@ -412,24 +412,27 @@ def replace_all_from_table(
                 ratings = {}
 
             # Логируем пользователей для диагностики
-            if ratings:
-                user_list = list(ratings.keys())
-                logger.debug(f"Processing ratings for game '{name}': {len(ratings)} users - {user_list[:5]}{'...' if len(user_list) > 5 else ''}")
+            logger.warning(f"STARTING TO PROCESS RATINGS FOR GAME '{name}': {len(ratings)} users - {list(ratings.keys())}")
 
             for user_name, rank in ratings.items():
                 try:
+                    print(f"DEBUG: Processing rating for user '{user_name}' (rank: {rank})")
                     if not isinstance(user_name, str) or not user_name.strip():
-                        logger.warning(f"Invalid user_name for game '{name}': {user_name}")
                         continue
 
                     # Пропускаем специального пользователя "Общий" - это не настоящий пользователь
                     user_name_clean = user_name.strip().lower()
-                    if user_name_clean in ["общий", "общая", "general", "общий рейтинг"]:
-                        logger.info(f"Пропускаем специального пользователя '{user_name}' для игры '{name}' (очищено: '{user_name_clean}')")
+                    print(f"DEBUG: Checking user: '{user_name}' -> '{user_name_clean}'")
+                    if 'общий' in user_name_clean or user_name_clean in ['general', 'общий рейтинг'] or user_name_clean == 'общий':
+                        print(f"DEBUG: SKIPPING special user '{user_name}' for game '{name}'")
+                        logger.error(f"SKIPPING special user '{user_name}' for game '{name}' - CONDITION MET")
                         continue
+                    else:
+                        print(f"DEBUG: NOT SKIPPING user '{user_name}' for game '{name}'")
+                        logger.warning(f"NOT SKIPPING user '{user_name}' for game '{name}' - CONDITION NOT MET")
 
-                    # rank теперь всегда должен быть числом (1-50), так как логика фильтрации уже применена выше
-                    if not isinstance(rank, int) or not (1 <= rank <= 50):
+                    # rank может быть 0 (место для будущего рейтинга) или 1-50 (оценка)
+                    if not isinstance(rank, int) or rank < 0 or rank > 50:
                         logger.warning(f"Invalid rank value for game '{name}', user '{user_name}': {rank} (type: {type(rank)})")
                         continue
 
@@ -445,7 +448,7 @@ def replace_all_from_table(
                         ratings_updated += 1
                         logger.debug(f"Updated rating for user '{user_name.strip()}' and game '{name}': {rank}")
                     else:
-                        # Создаем новый рейтинг
+                        # Создаем новый рейтинг (включая 0 - место для будущего рейтинга)
                         rating = RatingModel(
                             user_name=user_name.strip(),
                             game_id=game.id,
@@ -481,11 +484,21 @@ def replace_all_from_table(
         final_msg = f"Импорт завершен! Создано: {games_created}, обновлено: {games_updated}, BGG обновлено: {games_bgg_updated}, не найдено на BGG: {games_bgg_not_found}, рейтингов добавлено: {ratings_added}, обновлено: {ratings_updated}"
         progress_callback(len(rows), len(rows), final_msg)
 
+    # Удаляем рейтинги пользователя "общий" после импорта, так как это не настоящий пользователь
+    deleted_obshii = session.query(RatingModel).filter(RatingModel.user_name.ilike('%общий%')).delete()
+    if deleted_obshii > 0:
+        logger.info(f"Удалено {deleted_obshii} рейтингов пользователя 'общий'")
+
+    session.commit()
+
     logger.info(
         f"Import completed: created={games_created}, updated={games_updated}, "
         f"bgg_updated={games_bgg_updated}, bgg_not_found={games_bgg_not_found}, "
         f"ratings_added={ratings_added}, ratings_updated={ratings_updated}"
     )
+
+    # Возвращаем общее количество обработанных игр
+    return games_created + games_updated
 
 
 def clear_all_data(session: Session) -> Dict[str, int]:

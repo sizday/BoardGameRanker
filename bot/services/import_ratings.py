@@ -123,22 +123,15 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
     # 3: НизаГамс (рейтинг Niza Games)
     # 4..N: имена пользователей (столбцы рейтингов) до столбца "общий"
 
-    # Находим индекс столбца "общий"
-    obshii_index = None
-    for i, col_name in enumerate(header):
-        if col_name.strip().lower() == "общий":
-            obshii_index = i
-            break
+    # Извлекаем всех пользователей начиная со столбца 4, исключая столбцы с "общий"
+    all_user_names = [h.strip() for h in header[4:] if h.strip()]
+    logger.info(f"All user names from column 4: {all_user_names}")
 
-    # Берем пользователей от столбца 4 (после "НизаГамс") до столбца "общий" (не включая его)
-    if obshii_index is not None and obshii_index > 4:
-        user_names = [h.strip() for h in header[4:obshii_index] if h.strip()]
-    else:
-        # Если столбец "общий" не найден или находится слишком рано, берем всех начиная с 4-го столбца
-        all_user_names = [h.strip() for h in header[4:] if h.strip()]
-        user_names = [h for h in all_user_names if h.lower() != "общий"]
+    # Исключаем все столбцы, содержащие "общий" в любом регистре
+    user_names = [h for h in all_user_names if "общий" not in h.lower()]
+    logger.info(f"Filtered user names (excluding 'общий'): {user_names}")
 
-    logger.debug(f"Extracted user names from columns 4 to {obshii_index or 'end'}: {user_names}")
+    logger.info(f"Final extracted user names: {user_names}")
 
     data_rows: List[Dict] = []
     skipped_rows = 0
@@ -157,11 +150,11 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
         # Исправленный порядок согласно таблице:
         # row[0] = название игры
         # row[1] = жанр
-        # row[2] = bgg (рейтинг BGG)
+        # row[2] = bgg_id (ID игры на BGG)
         # row[3] = НизаГамс (рейтинг Niza Games)
         genre_raw = (row[1] or "").strip().lower() if len(row) > 1 else None
         genre = GENRE_MAPPING.get(genre_raw, genre_raw) if genre_raw else None
-        bgg_rank = _parse_int_or_none(row[2]) if len(row) > 2 else None
+        bgg_id = _parse_int_or_none(row[2]) if len(row) > 2 else None
         niza_rank = _parse_int_or_none(row[3]) if len(row) > 3 else None
 
         ratings: Dict[str, Union[int, str]] = {}
@@ -195,7 +188,7 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
         data_rows.append(
             {
                 "name": name,
-                "bgg_rank": bgg_rank,
+                "bgg_id": bgg_id,
                 "niza_games_rank": niza_rank,
                 "genre": genre or None,
                 "ratings": ratings,
