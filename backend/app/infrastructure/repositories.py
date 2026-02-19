@@ -191,6 +191,7 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
 
                 logger.debug(f"Загрузка деталей кандидата {idx}/{candidates_limit}: game_id={game_id}")
                 details = get_boardgame_details(game_id)
+                logger.debug(f"Получены детали для game_id={game_id}: name='{details.get('name')}', type='{details.get('type')}', rank={details.get('rank')}")
                 candidates.append(details)
                 # Задержка между запросами для избежания rate limiting
                 time.sleep(config.BGG_REQUEST_DELAY)
@@ -204,7 +205,7 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
 
         # Сортируем кандидатов по релевантности:
         # 1. Сначала игры с точным совпадением названия (без учета регистра)
-        # 2. Затем основные игры (boardgame) перед расширениями (boardgameexpansion)
+        # 2. Затем ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет перед расширениями
         # 3. Затем по мировому рейтингу (меньше число = выше рейтинг)
         # 4. Наконец по количеству голосов (больше = лучше)
         def sort_key(candidate: Dict[str, Any]) -> tuple:
@@ -212,16 +213,17 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
             query_name = name.lower()
             exact_match = candidate_name == query_name
 
-            # Определяем приоритет по типу игры
+            # Определяем приоритет по типу игры - ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет
             game_type = candidate.get("type", "").lower()
             is_base_game = game_type == "boardgame"  # Основная игра имеет приоритет
+            game_type_priority = 0 if is_base_game else 1000  # Большой штраф для расширений
 
             rank = candidate.get("rank") or 999999
             users_rated = candidate.get("usersrated") or 0
 
             return (
                 0 if exact_match else 1,      # Точное совпадение первым
-                0 if is_base_game else 1,     # Основные игры перед расширениями
+                game_type_priority,           # ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет
                 rank,                         # Лучший рейтинг (меньше число = выше)
                 -users_rated                  # Больше голосов
             )
@@ -229,7 +231,15 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
         candidates_sorted = sorted(candidates, key=sort_key)
         best_candidate = candidates_sorted[0]
 
-        logger.info(f"Выбран лучший кандидат для '{name}': '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, rank: {best_candidate.get('rank')})")
+        # Логируем всех кандидатов для диагностики
+        logger.debug(f"Все кандидаты для '{name}' (отсортированы):")
+        for i, candidate in enumerate(candidates_sorted[:5], 1):  # Показываем топ-5
+            game_type = candidate.get("type", "unknown")
+            rank = candidate.get("rank", "N/A")
+            users_rated = candidate.get("usersrated", 0)
+            logger.debug(f"  {i}. '{candidate.get('name')}' (ID: {candidate.get('id')}, type: {game_type}, rank: {rank}, users: {users_rated})")
+
+        logger.info(f"Выбран лучший кандидат для '{name}': '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, type: {best_candidate.get('type')}, rank: {best_candidate.get('rank')})")
 
         return best_candidate
 

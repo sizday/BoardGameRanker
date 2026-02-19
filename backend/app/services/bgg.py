@@ -133,6 +133,7 @@ def get_boardgame_details(
     На выходе минимум:
     - id: int
     - name: str | None
+    - type: str | None               # тип игры (boardgame, boardgameexpansion, etc.)
     - yearpublished: int | None
     - rank: int | None                # место в общем рейтинге boardgame
     - bayesaverage: float | None      # байесовский средний рейтинг
@@ -248,6 +249,7 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
         raise RuntimeError(f"Не удалось распарсить ответ BGG: {e}") from e
 
     game_id = item.attrib.get("id")
+    game_type = item.attrib.get("type")  # boardgame, boardgameexpansion, etc.
     name_el = item.find("name")
     name = name_el.attrib.get("value") if name_el is not None else None
 
@@ -333,6 +335,7 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
     return {
         "id": _to_int(game_id),
         "name": name,
+        "type": game_type,  # Добавляем тип игры
         "yearpublished": _to_int(year),
         "minplayers": _to_int(minplayers_el.attrib.get("value") if minplayers_el is not None else None),
         "maxplayers": _to_int(maxplayers_el.attrib.get("value") if maxplayers_el is not None else None),
