@@ -247,7 +247,7 @@ def replace_all_from_table(
             "bgg_id": int | None,          # (опционально) явный ID на BGG
             "niza_games_rank": int | None,
             "genre": str | None,
-            "ratings": { "user_name": int, ... }
+            "ratings": { "user_name": int, ... }  # рейтинг 0-10, где 0 = не оценивал
         },
         ...
     ]
@@ -378,18 +378,15 @@ def replace_all_from_table(
                         logger.warning(f"Invalid user_name for game '{name}': {user_name}")
                         continue
 
-                    if rank is None or rank == "":
-                        continue
-
-                    rank_int = int(rank)
-                    if not (0 <= rank_int <= 10):  # Рейтинги от 0 до 10 (0 = не оценивал)
-                        logger.warning(f"Invalid rank value for game '{name}', user '{user_name}': {rank}")
+                    # rank теперь всегда должен быть числом (0-10), так как логика фильтрации уже применена выше
+                    if not isinstance(rank, int) or not (0 <= rank <= 10):
+                        logger.warning(f"Invalid rank value for game '{name}', user '{user_name}': {rank} (type: {type(rank)})")
                         continue
 
                     rating = RatingModel(
                         user_name=user_name.strip(),
                         game_id=game.id,
-                        rank=rank_int,
+                        rank=rank,
                     )
                     session.add(rating)
                     ratings_added += 1

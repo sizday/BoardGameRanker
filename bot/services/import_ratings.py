@@ -2,7 +2,7 @@ import csv
 import io
 import logging
 import time
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Union
 
 import httpx
 
@@ -149,19 +149,33 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
         bgg_rank = _parse_int_or_none(row[2]) if len(row) > 2 else None
         niza_rank = _parse_int_or_none(row[3]) if len(row) > 3 else None
 
-        ratings: Dict[str, int] = {}
+        ratings: Dict[str, Union[int, str]] = {}
         for idx, user_name in enumerate(user_names, start=4):
             if idx >= len(row):
                 continue
             cell = (row[idx] or "").strip()
-            if not cell or cell.lower() == "нет":
+
+            # Пропускаем только если явно указано "нет"
+            if cell.lower() == "нет":
                 continue
-            try:
-                ratings[user_name] = int(cell)
-            except ValueError:
-                # игнорируем некорректные значения
-                logger.debug(f"Invalid rating value in row {row_idx}, column {idx}: {cell}")
-                continue
+
+            # Для пустых ячеек или других значений создаем запись
+            if not cell:
+                # Пустая ячейка = не оценивал (rank = 0)
+                ratings[user_name] = 0
+            else:
+                try:
+                    rating_value = int(cell)
+                    if 0 <= rating_value <= 10:
+                        ratings[user_name] = rating_value
+                    else:
+                        # Некорректное числовое значение - считаем как не оценивал
+                        ratings[user_name] = 0
+                        logger.debug(f"Rating value out of range in row {row_idx}, column {idx}: {cell}, setting to 0")
+                except ValueError:
+                    # Некорректное значение - считаем как не оценивал
+                    ratings[user_name] = 0
+                    logger.debug(f"Invalid rating value in row {row_idx}, column {idx}: {cell}, setting to 0")
 
         data_rows.append(
             {
