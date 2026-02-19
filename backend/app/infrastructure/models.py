@@ -1,4 +1,5 @@
 from sqlalchemy import JSON, Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from .db import Base
@@ -8,7 +9,7 @@ from app.domain.models import GameGenre
 class GameModel(Base):
     __tablename__ = "games"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=func.gen_random_uuid(), index=True)
     name = Column(String, nullable=False)
     # ID игры на BGG (для последующего обновления по API)
     bgg_id = Column(Integer, nullable=True, index=True)
@@ -63,9 +64,9 @@ class GameModel(Base):
 class RatingModel(Base):
     __tablename__ = "ratings"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=func.gen_random_uuid(), index=True)
     user_name = Column(String, nullable=False, index=True)
-    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+    game_id = Column(UUID(as_uuid=True), ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
     rank = Column(Integer, nullable=False)
 
     game = relationship("GameModel", back_populates="ratings")
@@ -80,7 +81,7 @@ class RankingSessionModel(Base):
 
     __tablename__ = "ranking_sessions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=func.gen_random_uuid(), index=True)
     user_name = Column(String, nullable=False, index=True)
 
     # first_tier, second_tier, ordering, final

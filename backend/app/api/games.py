@@ -3,6 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
 from pydantic import BaseModel
+from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -18,7 +19,7 @@ router = APIRouter()
 
 
 class GameDetails(BaseModel):
-    id: int
+    id: UUID
     name: str
     bgg_id: int | None = None
     bgg_rank: int | None = None

@@ -3,6 +3,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.domain.models import FirstTier, Game, RankingRequest, SecondTier
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 class GameItem(BaseModel):
-    id: int
+    id: UUID
     name: str
     usersrated: int | None = None
     yearpublished: int | None = None

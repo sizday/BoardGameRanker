@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
+from uuid import UUID
 
 
 @dataclass
 class Game:
-    id: int
+    id: UUID
     name: str
     bgg_rank: Optional[int] = None
     niza_games_rank: Optional[int] = None
@@ -46,7 +47,7 @@ class SecondTier(str, Enum):
 @dataclass
 class Rating:
     user_name: str
-    game_id: int
+    game_id: UUID
     rank: int
 
 
@@ -74,7 +75,7 @@ class FirstTieringState:
     Ключи словаря tiers — это id игры, значения — FirstTier.
     """
     games: List[Game]
-    tiers: Dict[int, FirstTier]
+    tiers: Dict[UUID, FirstTier]
 
 
 @dataclass
@@ -82,5 +83,5 @@ class SecondTieringState:
     """
     Результат второго прохода (супер круто / круто / отлично) по подмножеству игр.
     """
-    candidate_game_ids: List[int]
-    tiers: Dict[int, SecondTier]
+    candidate_game_ids: List[UUID]
+    tiers: Dict[UUID, SecondTier]
