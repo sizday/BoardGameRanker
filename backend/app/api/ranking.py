@@ -64,9 +64,13 @@ class RankingAnswerResponse(BaseModel):
     message: str = ""
 
 
-@router.post("/rank", response_model=RankGamesResponse)
+@router.post("/rank", response_model=RankGamesResponse, tags=["ranking"])
 async def rank_games_endpoint(request: RankGamesRequest):
-    """Rank games based on provided list."""
+    """
+    Rank games based on provided list using comparison algorithm.
+
+    Returns top N games from the provided list, ranked by preference.
+    """
     logger.info(f"Ranking request received: {len(request.games)} games, top_n={request.top_n}")
     games = [Game(id=item.id, name=item.name) for item in request.games]
     ranking_request = RankingRequest(games=games, top_n=request.top_n)
@@ -97,9 +101,14 @@ async def rank_games_endpoint(request: RankGamesRequest):
     )
 
 
-@router.post("/ranking/start", response_model=RankingStartResponse)
+@router.post("/ranking/start", response_model=RankingStartResponse, tags=["ranking"])
 async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_db)):
-    """Start a ranking session for a user."""
+    """
+    Start an interactive ranking session for a user.
+
+    Initializes a new ranking session and returns the first set of games
+    to compare for tier classification.
+    """
     logger.info(f"Starting ranking session for user: {request.user_name}")
     if not request.user_name:
         logger.warning("Ranking start request without user_name")
@@ -135,16 +144,21 @@ async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/ranking/answer-first", response_model=RankingAnswerResponse)
+@router.post("/ranking/answer-first", response_model=RankingAnswerResponse, tags=["ranking"])
 async def ranking_answer_first(
     request: RankingAnswerRequest, db: Session = Depends(get_db)
 ):
-    """User answer for first tier ranking (bad/good/excellent)."""
+    """
+    Submit user answer for first tier ranking.
+
+    Records user's tier classification (bad/good/excellent) for a game
+    in the current ranking session.
+    """
     logger.debug(f"First tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
     if request.session_id is None or request.game_id is None or request.tier is None:
         logger.warning("First tier answer request with missing required fields")
         raise HTTPException(
-            status_code=400, detail="session_id, game_id и tier обязательны"
+            status_code=400, detail="session_id, game_id, and tier are required"
         )
 
     try:
@@ -213,16 +227,21 @@ async def ranking_answer_first(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/ranking/answer-second", response_model=RankingAnswerResponse)
+@router.post("/ranking/answer-second", response_model=RankingAnswerResponse, tags=["ranking"])
 async def ranking_answer_second(
     request: RankingAnswerRequest, db: Session = Depends(get_db)
 ):
-    """User answer for second tier ranking (super_cool/cool/excellent)."""
+    """
+    Submit user answer for second tier ranking.
+
+    Records user's refined tier classification (super_cool/cool/excellent)
+    for a game in the current ranking session.
+    """
     logger.debug(f"Second tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
     if request.session_id is None or request.game_id is None or request.tier is None:
         logger.warning("Second tier answer request with missing required fields")
         raise HTTPException(
-            status_code=400, detail="session_id, game_id и tier обязательны"
+            status_code=400, detail="session_id, game_id, and tier are required"
         )
 
     try:

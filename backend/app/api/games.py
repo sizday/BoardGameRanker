@@ -54,7 +54,7 @@ class GamesSearchResponse(BaseModel):
     games: List[GameDetails]
 
 
-@router.get("/games/search", response_model=GamesSearchResponse)
+@router.get("/games/search", response_model=GamesSearchResponse, tags=["games"])
 async def search_games_in_db(
     name: str,
     exact: bool = False,
@@ -62,12 +62,12 @@ async def search_games_in_db(
     db: Session = Depends(get_db)
 ) -> GamesSearchResponse:
     """
-    Поиск игр в базе данных по названию.
+    Search for games in the database by name.
 
-    :param name: Название игры для поиска
-    :param exact: Если True, ищет только точные совпадения
-    :param limit: Максимальное количество результатов
-    :param db: Сессия базы данных
+    :param name: Game name to search for
+    :param exact: If True, search for exact matches only
+    :param limit: Maximum number of results to return
+    :param db: Database session
     """
     logger.info(f"Database search request: name='{name}', exact={exact}, limit={limit}")
 
@@ -126,28 +126,28 @@ async def search_games_in_db(
     return GamesSearchResponse(games=games)
 
 
-@router.post("/games/fix-translations")
+@router.post("/games/fix-translations", tags=["games"])
 async def fix_translations(db: Session = Depends(get_db)) -> dict:
     """
-    Исправляет форматирование существующих русских переводов в базе данных.
+    Fix formatting of existing Russian translations in the database.
     """
     logger.info("API request to fix existing translations formatting")
     try:
         fixed_count = await translation_service.fix_existing_translations(db)
         return {
             "status": "ok",
-            "message": f"Исправлено форматирование для {fixed_count} игр",
+            "message": f"Fixed formatting for {fixed_count} games",
             "fixed_count": fixed_count
         }
     except Exception as exc:
         logger.error(f"Error fixing translations: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка исправления переводов: {exc}")
+        raise HTTPException(status_code=500, detail=f"Error fixing translations: {exc}")
 
 
-@router.post("/games/translate-all")
+@router.post("/games/translate-all", tags=["games"])
 async def translate_all_games(db: Session = Depends(get_db)) -> dict:
     """
-    Запускает перевод описаний для всех игр, у которых нет русского перевода.
+    Start translation of descriptions for all games that don't have Russian translations.
     """
     logger.info("API request to translate all games")
     try:
@@ -156,26 +156,26 @@ async def translate_all_games(db: Session = Depends(get_db)) -> dict:
         await translate_game_descriptions_background(db)
         return {
             "status": "ok",
-            "message": "Перевод запущен в фоне"
+            "message": "Translation started in background"
         }
     except Exception as exc:
         logger.error(f"Error starting translation: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Ошибка запуска перевода: {exc}")
+        raise HTTPException(status_code=500, detail=f"Error starting translation: {exc}")
 
 
-@router.post("/games/save-from-bgg", response_model=GameDetails)
+@router.post("/games/save-from-bgg", response_model=GameDetails, tags=["games"])
 async def save_game_from_bgg(
     bgg_data: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ) -> GameDetails:
     """
-    Сохраняет игру в базу данных на основе данных из BGG API.
+    Save a game to the database based on BGG API data.
 
-    :param bgg_data: Данные игры из BGG API
-    :param background_tasks: FastAPI BackgroundTasks для фонового перевода
-    :param db: Сессия базы данных
-    :return: Сохраненная игра
+    :param bgg_data: Game data from BGG API
+    :param background_tasks: FastAPI BackgroundTasks for background translation
+    :param db: Database session
+    :return: Saved game details
     """
     game_name = bgg_data.get('name', 'Unknown')
     game_id = bgg_data.get('id')

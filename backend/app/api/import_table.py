@@ -29,14 +29,19 @@ class ImportTableResponse(BaseModel):
     message: str = ""
 
 
-@router.post("/import-table", response_model=ImportTableResponse)
+@router.post("/import-table", response_model=ImportTableResponse, tags=["admin"])
 async def import_table(
     request: ImportTableRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     logger.critical("🚀🚀🚀 IMPORT_TABLE FUNCTION CALLED! 🚀🚀🚀")
-    """Import games data from table to database."""
+    """
+    Import games data from external table/spreadsheet to database.
+
+    Updates existing games and creates new ratings. Supports forced updates
+    to refresh BGG data for all games.
+    """
     logger.error(f"🚀 IMPORT STARTED: {len(request.rows)} rows, forced_update={request.is_forced_update}")
 
     # Логируем структуру данных для диагностики ошибок
@@ -62,7 +67,7 @@ async def import_table(
         return ImportTableResponse(
             status="ok",
             games_imported=len(request.rows),
-            message="Импорт завершен. Перевод описаний запущен в фоне."
+            message="Import completed. Translation started in background."
         )
     except HTTPException:
         # Не логируем HTTP исключения повторно
@@ -74,7 +79,7 @@ async def import_table(
         logger.error(f"Request details: rows={len(request.rows)}, forced_update={request.is_forced_update}")
         if request.rows:
             logger.error(f"First row sample: {request.rows[0]}")
-        raise HTTPException(status_code=400, detail=f"Ошибка импорта данных: {type(exc).__name__}: {str(exc)}")
+        raise HTTPException(status_code=400, detail=f"Data import error: {type(exc).__name__}: {str(exc)}")
 
 
 

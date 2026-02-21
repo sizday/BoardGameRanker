@@ -46,15 +46,16 @@ class BGGSearchResponse(BaseModel):
     games: List[BGGGameDetails]
 
 
-@router.get("/bgg/search", response_model=BGGSearchResponse)
+@router.get("/bgg/search", response_model=BGGSearchResponse, tags=["bgg"])
 async def bgg_search(name: str, exact: bool = False, limit: int = 5) -> BGGSearchResponse:
     """
-    Поиск игр на BGG по названию с возвратом подробной информации,
-    включая мировой рейтинг и URL изображений.
+    Search for games on BGG by name with detailed information.
 
-    :param name: Название игры для поиска
-    :param exact: Если True, ищет только точные совпадения
-    :param limit: Максимальное количество игр, для которых загружаются детали (по умолчанию 5)
+    Returns comprehensive game data including global rankings and image URLs.
+
+    :param name: Game name to search for
+    :param exact: If True, search for exact matches only
+    :param limit: Maximum number of games to load details for (default: 5)
     """
     print(f"🔍 BGG search API called: name='{name}', exact={exact}, limit={limit}", flush=True)
     print(f"🔍 BGG API called: name='{name}', exact={exact}, limit={limit}", flush=True)
@@ -101,7 +102,7 @@ async def bgg_search(name: str, exact: bool = False, limit: int = 5) -> BGGSearc
                 details = get_boardgame_details(game_id)
                 candidates.append(BGGGameDetails(**details))
             except Exception as e:
-                logger.error(f"Ошибка при загрузке деталей игры game_id={item.get('id')}: {e}", exc_info=True)
+                logger.error(f"Error loading game details for game_id={item.get('id')}: {e}", exc_info=True)
                 # Продолжаем обработку остальных игр
 
         # Сортируем результаты по релевантности:
@@ -130,11 +131,11 @@ async def bgg_search(name: str, exact: bool = False, limit: int = 5) -> BGGSearc
 
         return BGGSearchResponse(games=games)
     except ValueError as exc:
-        logger.error(f"Ошибка конфигурации BGG: {exc}")
-        raise HTTPException(status_code=500, detail=f"Ошибка конфигурации BGG: {exc}")
+        logger.error(f"BGG configuration error: {exc}")
+        raise HTTPException(status_code=500, detail=f"BGG configuration error: {exc}")
     except Exception as exc:  # noqa: BLE001
-        logger.error(f"Ошибка при обращении к BGG API: {exc}", exc_info=True)
-        raise HTTPException(status_code=502, detail=f"Ошибка при обращении к BGG: {exc}")
+        logger.error(f"Error accessing BGG API: {exc}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Error accessing BGG API: {exc}")
 
 
 

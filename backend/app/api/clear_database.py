@@ -25,16 +25,21 @@ class ClearDatabaseResponse(BaseModel):
     message: str = ""
 
 
-@router.post("/clear-database", response_model=ClearDatabaseResponse)
+@router.post("/clear-database", response_model=ClearDatabaseResponse, tags=["admin"])
 async def clear_database(
     request: ClearDatabaseRequest,
     db: Session = Depends(get_db)
 ):
-    """Clear all data from database (games, ratings, ranking sessions)."""
+    """
+    Clear all data from database.
+
+    Removes all games, ratings, ranking sessions, and users.
+    Requires explicit confirmation via confirm=true parameter.
+    """
     if not request.confirm:
         raise HTTPException(
             status_code=400,
-            detail="Для очистки базы данных требуется явное подтверждение. Установите confirm=true."
+            detail="Explicit confirmation required to clear database. Set confirm=true."
         )
 
     logger.info("Clear database request confirmed")
