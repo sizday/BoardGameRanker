@@ -17,6 +17,7 @@ from handlers.ranking import router as ranking_router
 from handlers.bgg_game import router as bgg_game_router
 from handlers.login import router as login_router
 from handlers.my_games import router as my_games_router
+from handlers.menu import router as menu_router
 from services.import_ratings import import_ratings_from_sheet
 from services.clear_database import clear_database
 from config import config
@@ -59,27 +60,7 @@ async def default_language_middleware(
     return await handler(event, data)
 
 
-async def on_start(message: Message):
-    user_id = message.from_user.id
-    user_name = message.from_user.full_name or str(user_id)
-    logger.info(f"User {user_name} (ID: {user_id}) started bot")
-    
-    commands = [
-        "/login — зарегистрироваться в системе",
-        "/my_games — посмотреть свои игры",
-        "/start_ranking — начать формирование рейтинга"
-    ]
-
-    # Добавляем команды админа
-    if config.is_admin(message.from_user.id):
-        commands.insert(0, "/import — загрузить данные из Google-таблицы")
-        commands.insert(0, "/clear — очистить всю базу данных")
-        logger.debug(f"Admin commands shown to user {user_name}")
-
-    await message.answer(
-        "Привет! Я помогу составить топ-50 твоих настольных игр.\n"
-        "Команды:\n" + "\n".join(commands)
-    )
+# Функция on_start удалена - теперь используется роутер menu
 
 
 async def on_import(message: Message):
@@ -187,13 +168,13 @@ async def main():
     dp.update.middleware(default_language_middleware)
     logger.debug("Middleware registered")
 
-    # Команды верхнего уровня
-    dp.message.register(on_start, CommandStart())
+    # Команды верхнего уровня - теперь обрабатываются через роутеры
     dp.message.register(on_import, Command("import"))
     dp.message.register(on_clear_database, Command("clear"))
     logger.debug("Commands registered")
 
     # Подключаем роутеры
+    dp.include_router(menu_router)  # Меню должно быть первым для обработки /start
     dp.include_router(ranking_router)
     dp.include_router(bgg_game_router)
     dp.include_router(login_router)
