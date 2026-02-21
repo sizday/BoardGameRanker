@@ -65,6 +65,8 @@ async def import_ratings_from_sheet(
     Может возбуждать ValueError при проблемах с форматом данных.
     """
     logger.info(f"Starting import from sheet: {sheet_csv_url}")
+    logger.info(f"API base URL: {api_base_url}")
+    logger.info(f"CSV URL configured: {bool(sheet_csv_url)}")
     
     if not sheet_csv_url:
         logger.error("RATING_SHEET_CSV_URL not configured")
@@ -82,9 +84,17 @@ async def import_ratings_from_sheet(
         resp.raise_for_status()
 
     text = resp.text
+    logger.info(f"Raw CSV content length: {len(text)} characters")
+    logger.debug(f"Raw CSV content (first 500 chars): {text[:500]}")
+
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
-    logger.info(f"CSV downloaded: {len(rows)} rows")
+    logger.info(f"CSV parsed into {len(rows)} rows")
+
+    if rows:
+        logger.info(f"First row (header): {rows[0]}")
+        if len(rows) > 1:
+            logger.info(f"Second row (first data): {rows[1]}")
 
     if not rows:
         logger.error("CSV file is empty")
@@ -100,12 +110,20 @@ async def import_ratings_from_sheet(
         logger.error(f"CSV header has insufficient columns: {len(header)}, header: {header}")
         raise ValueError(f"Недостаточно колонок в заголовке. Ожидается минимум 5, получено {len(header)}. Заголовок: {header}")
 
-    return await _process_sheet_data(api_base_url, rows, progress_callback)
+    games_count = await _process_sheet_data(api_base_url, rows, progress_callback)
+    logger.info(f"Import completed successfully: {games_count} games processed")
+    return games_count
 
 
 async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress_callback: Optional[Callable[[int, int, str], None]] = None) -> int:
     """Обрабатывает данные листа и отправляет в backend"""
     logger.info(f"Processing sheet data: {len(rows)} rows")
+
+    if not rows:
+        logger.warning("No rows to process")
+        return 0
+
+    logger.info(f"Header row: {rows[0]}")
     
     if not rows:
         logger.warning("No rows to process")
@@ -198,10 +216,11 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
     logger.info(f"Processed {len(data_rows)} games, skipped {skipped_rows} rows")
 
     # Отправляем данные в backend с повторными попытками
+    logger.info(f"Sending {len(data_rows)} games to backend API")
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # Sending data to backend (attempt {attempt + 1}/{max_retries}) - removed logging to reduce noise
+            logger.info(f"Sending data to backend (attempt {attempt + 1}/{max_retries})")
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{api_base_url}/api/import-table",
@@ -209,9 +228,12 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
                     timeout=120.0,  # Увеличиваем таймаут для импорта
                 )
                 resp.raise_for_status()
-            # Successfully sent data to backend on attempt {attempt + 1} - removed logging to reduce noise
+                backend_response = resp.json()
+                logger.info(f"Backend response: {backend_response}")
+            logger.info(f"Successfully sent data to backend on attempt {attempt + 1}")
             break  # Успешно отправили данные
         except Exception as e:
+            logger.error(f"Attempt {attempt + 1} failed: {e}")
             if attempt == max_retries - 1:
                 logger.error(f"Не удалось отправить данные в backend после {max_retries} попыток")
                 raise RuntimeError(f"Не удалось отправить данные в backend после {max_retries} попыток")

@@ -108,7 +108,7 @@ async def on_import(message: Message):
 
 async def on_clear_database(message: Message):
     """
-    Команда для очистки всей базы данных через backend API.
+    Команда для очистки базы данных через backend API (сохраняя пользователей).
     Доступна только админу.
     """
     user_id = message.from_user.id
@@ -137,8 +137,8 @@ async def on_clear_database(message: Message):
             f"Удалено:\n"
             f"• Игр: {games_deleted}\n"
             f"• Рейтингов: {ratings_deleted}\n"
-            f"• Сессий ранжирования: {sessions_deleted}\n"
-            f"• Пользователей: {users_deleted}"
+            f"• Сессий ранжирования: {sessions_deleted}\n\n"
+            f"👥 Пользователи сохранены ({users_deleted} удалено)"
         )
 
     except RuntimeError as exc:

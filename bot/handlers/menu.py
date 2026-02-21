@@ -136,28 +136,66 @@ async def handle_menu_callbacks(
             # Запускаем импорт данных
             await callback.message.answer("🚀 Начинаю импорт данных из Google Sheets...")
 
+            # Проверяем конфигурацию
+            if not config.RATING_SHEET_CSV_URL:
+                await callback.message.answer(
+                    "❌ Ошибка: RATING_SHEET_CSV_URL не настроена\n\n"
+                    "Чтобы настроить импорт:\n"
+                    "1. Создайте Google Таблицу с данными\n"
+                    "2. Опубликуйте её: Файл → Опубликовать в интернете → CSV\n"
+                    "3. Скопируйте ссылку в переменную RATING_SHEET_CSV_URL в .env файле\n\n"
+                    "Пример: RATING_SHEET_CSV_URL=https://docs.google.com/spreadsheets/d/YOUR_ID/export?format=csv"
+                )
+                logger.error("RATING_SHEET_CSV_URL is not configured")
+                return
+
+            logger.info(f"Using CSV URL: {config.RATING_SHEET_CSV_URL}")
+
+            # Проверяем доступность backend
             try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(f"{api_base_url}/health", timeout=5.0)
+                    if response.status_code != 200:
+                        await callback.message.answer(f"❌ Backend недоступен: HTTP {response.status_code}")
+                        return
+            except Exception as exc:
+                await callback.message.answer(f"❌ Не удалось подключиться к backend: {exc}")
+                return
+
+            try:
+                logger.info(f"Starting import with CSV URL: {config.RATING_SHEET_CSV_URL}")
                 imported_count = await import_ratings_from_sheet(
                     api_base_url=api_base_url,
                     sheet_csv_url=config.RATING_SHEET_CSV_URL,
                 )
+                logger.info(f"Import completed: {imported_count} games processed")
 
                 if imported_count == 0:
                     logger.warning("Import completed but no games were imported")
-                    await callback.message.answer("⚠️ Таблица пуста или данные не найдены.")
+                    await callback.message.answer(
+                        "⚠️ Импорт завершен, но игры не были загружены.\n\n"
+                        "Возможные причины:\n"
+                        "• CSV файл пустой или недоступен\n"
+                        "• Неправильный формат данных\n"
+                        "• Все игры уже есть в базе данных\n\n"
+                        "Проверьте логи для подробной информации."
+                    )
                 else:
                     logger.info(f"Import completed successfully: {imported_count} games imported")
                     await callback.message.answer(
                         f"✅ Импорт завершен!\n\n"
-                        f"Загружено данных для {imported_count} игр.\n"
-                        f"Игры добавляются в базу данных по одной с автоматической загрузкой данных из BGG."
+                        f"📊 Обработано {imported_count} игр из таблицы\n"
+                        f"🎮 Игры добавлены в базу данных\n"
+                        f"🌐 Данные из BGG загружаются автоматически\n\n"
+                        f"⚠️ Рейтинги добавляются только для зарегистрированных пользователей\n"
+                        f"💡 Если рейтинги не появились, убедитесь, что пользователи зарегистрированы с теми же именами, что и в таблице"
                     )
             except ValueError as exc:
                 logger.error(f"Validation error during import: {exc}")
-                await callback.message.answer(str(exc))
+                await callback.message.answer(f"❌ Ошибка валидации: {str(exc)}")
             except Exception as exc:  # noqa: BLE001
                 logger.error(f"Error during ratings import: {exc}", exc_info=True)
-                await callback.message.answer(f"Ошибка при импорте данных: {exc}")
+                await callback.message.answer(f"❌ Ошибка при импорте данных: {type(exc).__name__}: {str(exc)}")
 
         elif action == "clear":
             # Проверяем, что пользователь админ
@@ -183,8 +221,8 @@ async def handle_menu_callbacks(
                     f"Удалено:\n"
                     f"• Игр: {games_deleted}\n"
                     f"• Рейтингов: {ratings_deleted}\n"
-                    f"• Сессий ранжирования: {sessions_deleted}\n"
-                    f"• Пользователей: {users_deleted}"
+                    f"• Сессий ранжирования: {sessions_deleted}\n\n"
+                    f"👥 Пользователи сохранены ({users_deleted} удалено)"
                 )
 
             except RuntimeError as exc:

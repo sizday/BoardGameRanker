@@ -264,3 +264,21 @@ pip install -r requirements-bot.txt
 # $env:RATING_SHEET_CSV_URL="your_csv_url"
 python main.py
 ```
+
+### Инструменты разработчика
+
+В папке `backend/scripts/` находятся полезные скрипты:
+
+```bash
+cd backend
+
+# Ожидание готовности БД (используется при запуске)
+python scripts/wait_for_db.py
+
+# Проверка и создание таблиц (используется при запуске)
+python scripts/check_tables.py
+
+# Полное пересоздание БД (для разработки/тестирования)
+python scripts/reset_db.py          # Пересоздать таблицы
+python scripts/reset_db.py --force  # Принудительно удалить и пересоздать
+```

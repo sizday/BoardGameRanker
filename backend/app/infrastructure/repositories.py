@@ -225,14 +225,10 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
 
     if explicit_bgg_id:
         logger.debug(f"Fetching BGG details by explicit ID: {explicit_bgg_id} for game: {name}")
-        try:
-            result = get_boardgame_details(int(explicit_bgg_id))
-            # Задержка между запросами для избежания rate limiting
-            time.sleep(config.BGG_REQUEST_DELAY)
-            return result
-        except Exception as e:
-            logger.warning(f"Failed to fetch BGG details by ID {explicit_bgg_id}: {e}")
-            return None
+        result = get_boardgame_details(int(explicit_bgg_id))
+        # Задержка между запросами для избежания rate limiting
+        time.sleep(config.BGG_REQUEST_DELAY)
+        return result
 
     if not name:
         logger.debug("No name provided in row, skipping BGG fetch")
@@ -358,6 +354,12 @@ def replace_all_from_table(
     """
     logger.info(f"Starting import from table: {len(rows)} rows, forced_update={is_forced_update}")
 
+    # Логируем первые несколько строк для диагностики
+    if rows:
+        logger.info(f"Sample row 0: {rows[0]}")
+        if len(rows) > 1:
+            logger.info(f"Sample row 1: {rows[1]}")
+
     # Логируем структуру данных для диагностики
     if rows:
         logger.debug(f"Sample row structure: {rows[0]}")
@@ -368,6 +370,10 @@ def replace_all_from_table(
     
     # Рейтинги добавляем/обновляем последовательно вместе с играми
     # (не удаляем существующие, чтобы сохранить историю)
+
+    # Проверим, сколько пользователей есть в системе
+    total_users_in_db = session.query(UserModel).count()
+    logger.info(f"Total users in database: {total_users_in_db}")
 
     games_created = 0
     games_updated = 0
@@ -553,6 +559,10 @@ def replace_all_from_table(
             session.rollback()
             continue
 
+        # Логируем прогресс каждые 10 игр
+        if idx % 10 == 0:
+            logger.info(f"Processed {idx}/{len(rows)} games so far: created={games_created}, updated={games_updated}, ratings_added={ratings_added}")
+
         # Небольшая задержка между обработкой игр для снижения нагрузки на API
         time.sleep(config.BGG_REQUEST_DELAY)
 
@@ -573,11 +583,11 @@ def replace_all_from_table(
 
 def clear_all_data(session: Session) -> Dict[str, int]:
     """
-    Удаляет все данные из базы данных.
+    Удаляет все данные из базы данных, кроме пользователей.
 
     Возвращает словарь с количеством удаленных записей по каждой таблице.
     """
-    logger.info("Starting database cleanup")
+    logger.info("Starting database cleanup (preserving users)")
 
     # Удаляем рейтинги (сначала, чтобы не было проблем с foreign keys)
     ratings_deleted = session.query(RatingModel).delete()
@@ -587,20 +597,20 @@ def clear_all_data(session: Session) -> Dict[str, int]:
     sessions_deleted = session.query(RankingSessionModel).delete()
     logger.info(f"Deleted {sessions_deleted} ranking sessions")
 
-    # Удаляем пользователей
-    users_deleted = session.query(UserModel).delete()
-    logger.info(f"Deleted {users_deleted} users")
-
     # Удаляем игры (последними, так как на них могут ссылаться рейтинги)
     games_deleted = session.query(GameModel).delete()
     logger.info(f"Deleted {games_deleted} games")
 
-    logger.info(f"Database cleanup completed: games={games_deleted}, ratings={ratings_deleted}, sessions={sessions_deleted}, users={users_deleted}")
+    # Пользователи НЕ удаляются
+    users_deleted = 0
+    logger.info("Users preserved - not deleted")
+
+    logger.info(f"Database cleanup completed: games={games_deleted}, ratings={ratings_deleted}, sessions={sessions_deleted}, users_preserved=users_not_deleted")
 
     return {
         "games_deleted": games_deleted,
         "ratings_deleted": ratings_deleted,
         "sessions_deleted": sessions_deleted,
-        "users_deleted": users_deleted,
+        "users_deleted": users_deleted,  # Всегда 0, так как пользователи не удаляются
     }
 

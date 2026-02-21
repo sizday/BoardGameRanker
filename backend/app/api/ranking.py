@@ -43,7 +43,7 @@ class RankGamesResponse(BaseModel):
 
 
 class RankingStartRequest(BaseModel):
-    user_name: str
+    user_id: str
 
 
 class RankingStartResponse(BaseModel):
@@ -109,14 +109,21 @@ async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_
     Initializes a new ranking session and returns the first set of games
     to compare for tier classification.
     """
-    logger.info(f"Starting ranking session for user: {request.user_name}")
-    if not request.user_name:
-        logger.warning("Ranking start request without user_name")
-        raise HTTPException(status_code=400, detail="user_name is required")
+    logger.info(f"Starting ranking session for user_id: {request.user_id}")
+    if not request.user_id:
+        logger.warning("Ranking start request without user_id")
+        raise HTTPException(status_code=400, detail="user_id is required")
 
     service = RankingService(db)
     try:
-        data = service.start_session(user_name=request.user_name)
+        # Получаем имя пользователя по user_id для обратной совместимости с RankingService
+        from app.infrastructure.models import UserModel
+        from uuid import UUID
+        user = db.query(UserModel).filter(UserModel.id == UUID(request.user_id)).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        data = service.start_session(user_name=user.name)
         db.commit()
         logger.info(f"Ranking session started: session_id={data['session_id']}, total_games={data.get('total_games', 0)}")
         return RankingStartResponse(
@@ -140,7 +147,7 @@ async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_
         )
     except Exception as exc:  # noqa: BLE001
         db.rollback()
-        logger.error(f"Error starting ranking session for user {request.user_name}: {exc}", exc_info=True)
+        logger.error(f"Error starting ranking session for user_id {request.user_id}: {exc}", exc_info=True)
         raise HTTPException(status_code=400, detail=str(exc))
 
 

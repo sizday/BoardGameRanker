@@ -102,6 +102,7 @@ class RankingSessionModel(Base):
     __tablename__ = "ranking_sessions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=func.gen_random_uuid(), index=True)
+    user_name = Column(String, nullable=True)  # Для обратной совместимости
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # first_tier, second_tier, ordering, final

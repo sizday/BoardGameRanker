@@ -31,9 +31,9 @@ async def clear_database(
     db: Session = Depends(get_db)
 ):
     """
-    Clear all data from database.
+    Clear all data from database except users.
 
-    Removes all games, ratings, ranking sessions, and users.
+    Removes all games, ratings, and ranking sessions, but preserves users.
     Requires explicit confirmation via confirm=true parameter.
     """
     if not request.confirm:
@@ -54,7 +54,7 @@ async def clear_database(
             ratings_deleted=result["ratings_deleted"],
             sessions_deleted=result["sessions_deleted"],
             users_deleted=result["users_deleted"],
-            message="База данных успешно очищена."
+            message="База данных успешно очищена. Пользователи сохранены."
         )
     except Exception as exc:  # noqa: BLE001
         db.rollback()

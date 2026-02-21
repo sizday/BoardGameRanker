@@ -167,28 +167,50 @@ def get_boardgame_details(
                 logger.warning(f"BGG вернул пустой ответ для game_id={game_id}")
                 raise RuntimeError("Пустой ответ от BGG при запросе статистики игры")
 
-            result = _parse_thing_response(resp.text)
-            logger.info(f"BGG thing успешен для game_id={game_id}: name='{result.get('name')}', rank={result.get('rank')}")
-            return result
+            try:
+                result = _parse_thing_response(resp.text)
+                logger.info(f"BGG thing успешен для game_id={game_id}: name='{result.get('name')}', rank={result.get('rank')}")
+                return result
+            except RuntimeError as parse_exc:
+                # Если игра не найдена в BGG - это нормально
+                if "не содержит элемента item" in str(parse_exc):
+                    logger.warning(f"Игра game_id={game_id} не найдена в BGG")
+                    return None
+                else:
+                    raise
         except requests.exceptions.RequestException as exc:
             last_error = exc
             logger.warning(f"Ошибка HTTP запроса к BGG thing (попытка {attempt}/{retries}) для game_id={game_id}: {exc}")
             if attempt < retries:
                 time.sleep(1.5)
             else:
-                logger.error(f"Не удалось получить детали игры game_id={game_id} после {retries} попыток: {exc}")
-                raise RuntimeError(
-                    f"Ошибка обращения к BGG API (thing) после {retries} попыток: {exc}"
-                ) from exc
+                # Если игра не найдена - это нормально
+                if "не содержит элемента item" in str(last_error):
+                    logger.warning(f"Игра game_id={game_id} не найдена в BGG после {retries} попыток")
+                    return None
+                else:
+                    logger.error(f"Не удалось получить детали игры game_id={game_id} после {retries} попыток: {exc}")
+                    raise RuntimeError(
+                        f"Ошибка обращения к BGG API (thing) после {retries} попыток: {exc}"
+                    ) from exc
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-            logger.error(f"Неожиданная ошибка при получении деталей игры game_id={game_id} (попытка {attempt}/{retries}): {exc}", exc_info=True)
+            # Если игра не найдена в BGG - это нормально, логируем как warning
+            if "не содержит элемента item" in str(exc):
+                logger.warning(f"Игра game_id={game_id} не найдена в BGG (попытка {attempt}/{retries})")
+            else:
+                logger.error(f"Неожиданная ошибка при получении деталей игры game_id={game_id} (попытка {attempt}/{retries}): {exc}", exc_info=True)
             if attempt < retries:
                 time.sleep(1.5)
             else:
-                raise RuntimeError(
-                    f"Ошибка обращения к BGG API (thing) после {retries} попыток: {exc}"
-                ) from exc
+                # Если игра не найдена - возвращаем None вместо ошибки
+                if "не содержит элемента item" in str(exc):
+                    logger.warning(f"Игра game_id={game_id} не найдена в BGG после {retries} попыток")
+                    return None
+                else:
+                    raise RuntimeError(
+                        f"Ошибка обращения к BGG API (thing) после {retries} попыток: {exc}"
+                    ) from exc
 
     raise RuntimeError(f"Не удалось получить статистику игры: {last_error}")
 
@@ -240,7 +262,7 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
         root = ET.fromstring(xml_text)
         item = root.find("item")
         if item is None:
-            logger.error("Ответ BGG thing не содержит элемента item")
+            logger.warning("Ответ BGG thing не содержит элемента item - игра не найдена")
             logger.debug(f"XML содержимое (первые 500 символов): {xml_text[:500]}")
             raise RuntimeError("Ответ BGG не содержит элемента item")
     except ET.ParseError as e:

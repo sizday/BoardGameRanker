@@ -158,14 +158,26 @@ def _second_tier_keyboard(session_id: int, game_id: int) -> InlineKeyboardMarkup
 async def _send_first_tier_question(
     message: Message,
     api_base_url: str,
-    user_name: str,
+    user_id: int,
 ) -> None:
-    logger.info(f"Starting ranking for user: {user_name}")
+    logger.info(f"Starting ranking for user_id: {user_id}")
     try:
+        # Сначала получаем внутренний UUID пользователя
+        async with httpx.AsyncClient() as client:
+            user_resp = await client.post(
+                f"{api_base_url}/api/users",
+                json={"telegram_id": user_id, "name": message.from_user.full_name or str(user_id)},
+                timeout=10.0,
+            )
+            user_resp.raise_for_status()
+            user_data = user_resp.json()
+            internal_user_id = user_data["id"]
+
+        # Теперь запускаем ранжирование
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{api_base_url}/api/ranking/start",
-                json={"user_name": user_name},
+                json={"user_id": internal_user_id},
                 timeout=30.0,
             )
             resp.raise_for_status()
@@ -207,11 +219,11 @@ async def cmd_start_ranking(message: Message, state: FSMContext):
     api_base_url = message.bot["api_base_url"]
     user_name = message.from_user.full_name or str(message.from_user.id)
     user_id = message.from_user.id
-    
+
     logger.info(f"User {user_name} (ID: {user_id}) requested ranking start")
-    
+
     try:
-        await _send_first_tier_question(message, api_base_url, user_name)
+        await _send_first_tier_question(message, api_base_url, user_id)
         await state.set_state(RankingStates.first_tier)
         logger.debug(f"Ranking state set to first_tier for user {user_name}")
     except Exception as exc:  # noqa: BLE001

@@ -30,10 +30,17 @@ class RankingService:
         logger.debug(f"Loading games for user: {user_name}")
         games: List[Game] = []
 
+        # Сначала найдем пользователя по имени
+        from app.infrastructure.models import UserModel
+        user = self.db.query(UserModel).filter(UserModel.name == user_name).first()
+        if not user:
+            logger.warning(f"User '{user_name}' not found for ranking")
+            return []
+
         q = (
             self.db.query(GameModel)
             .join(RatingModel, RatingModel.game_id == GameModel.id)
-            .filter(RatingModel.user_name == user_name)
+            .filter(RatingModel.user_id == user.id)
             .order_by(GameModel.id)
         )
 
@@ -98,6 +105,14 @@ class RankingService:
         Создаёт новую сессию ранжирования для пользователя и возвращает первую игру.
         """
         logger.info(f"Starting ranking session for user: {user_name}")
+
+        # Найдем пользователя по имени
+        from app.infrastructure.models import UserModel
+        user = self.db.query(UserModel).filter(UserModel.name == user_name).first()
+        if not user:
+            logger.warning(f"User '{user_name}' not found for ranking")
+            raise ValueError(f"Пользователь '{user_name}' не найден.")
+
         games = self._load_games_for_user(user_name)
         if not games:
             logger.warning(f"No games found for user: {user_name}")
@@ -106,7 +121,8 @@ class RankingService:
         games_ids = [g.id for g in games]
 
         session = RankingSessionModel(
-            user_name=user_name,
+            user_name=user_name,  # Сохраняем для обратной совместимости
+            user_id=user.id,      # Добавляем user_id
             state="first_tier",
             games=games_ids,
             first_tiers={},
