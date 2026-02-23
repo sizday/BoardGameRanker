@@ -12,6 +12,7 @@ from config import config
 from .login import cmd_login
 from .my_games import _cmd_my_games_impl
 from .ranking import cmd_start_ranking
+from .bgg_game import GameSearchStates
 
 # Импортируем FSMContext для работы с состояниями
 from aiogram.fsm.context import FSMContext
@@ -46,6 +47,12 @@ def create_main_menu_keyboard(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="🏆 Начать ранжирование",
                 callback_data="menu_start_ranking"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🔍 Поиск игры",
+                callback_data="menu_search_game"
             )
         ]
     ]
@@ -131,6 +138,14 @@ async def handle_menu_callbacks(
         elif action == "start_ranking":
             # Вызываем функцию начала ранжирования напрямую
             await cmd_start_ranking(callback.message, state)
+
+        elif action == "search_game":
+            # Начинаем процесс поиска игры
+            await callback.message.answer(
+                "🔍 Введите название игры для поиска:\n\n"
+                "Например: Terraforming Mars, Wingspan, Ticket to Ride"
+            )
+            await state.set_state(GameSearchStates.waiting_for_game_name)
 
         elif action == "import":
             # Проверяем, что пользователь админ

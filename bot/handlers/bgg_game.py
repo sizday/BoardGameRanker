@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import httpx
-from aiogram import Router
-from aiogram.filters import Command
+from aiogram import Router, F
+from aiogram.filters import Command, StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 logger = logging.getLogger(__name__)
@@ -11,29 +13,19 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
-@router.message(Command("game"))
-async def cmd_game(message: Message, api_base_url: str, default_language: str) -> None:
-    """
-    Команда /game <название игры>
+class GameSearchStates(StatesGroup):
+    waiting_for_game_name = State()
 
-    Сначала ищет игру в базе данных, если не найдена - обращается к BGG API.
-    Возвращает полную информацию и картинку.
+
+async def _search_game_impl(
+    message, query: str, api_base_url: str, default_language: str
+) -> None:
+    """
+    Вспомогательная функция для поиска игры по названию.
+    Используется как из команды /game, так и из меню.
     """
     user_id = message.from_user.id
     user_name = message.from_user.full_name or str(user_id)
-
-    # Ожидаем, что пользователь напишет: /game Название игры
-    parts = (message.text or "").split(maxsplit=1)
-    if len(parts) < 2:
-        logger.debug(f"User {user_name} sent /game without query")
-        await message.answer("Пожалуйста, укажи название игры. Пример:\n/game Terraforming Mars")
-        return
-
-    query = parts[1].strip()
-    if not query:
-        logger.debug(f"User {user_name} sent empty game query")
-        await message.answer("Название игры не должно быть пустым.")
-        return
 
     logger.info(f"User {user_name} (ID: {user_id}) searching for game: {query}")
 
@@ -113,7 +105,7 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
 
     # Извлекаем данные игры (работает для обоих источников)
     name = game.get("name") or "Без названия"
-    bgg_id = game.get("id") or game.get("bgg_id")
+    bgg_id = game.get("bgg_id")
     year = game.get("yearpublished")
     minplayers = game.get("minplayers")
     maxplayers = game.get("maxplayers")
@@ -197,5 +189,65 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
         await message.answer_photo(photo=image, caption=text)
     else:
         await message.answer(text)
+
+
+@router.message(Command("game"))
+async def cmd_game(message: Message, api_base_url: str, default_language: str) -> None:
+    """
+    Команда /game <название игры>
+
+    Сначала ищет игру в базе данных, если не найдена - обращается к BGG API.
+    Возвращает полную информацию и картинку.
+    """
+    user_id = message.from_user.id
+    user_name = message.from_user.full_name or str(user_id)
+
+    # Ожидаем, что пользователь напишет: /game Название игры
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        logger.debug(f"User {user_name} sent /game without query")
+        await message.answer("Пожалуйста, укажи название игры. Пример:\n/game Terraforming Mars")
+        return
+
+    query = parts[1].strip()
+    if not query:
+        logger.debug(f"User {user_name} sent empty game query")
+        await message.answer("Название игры не должно быть пустым.")
+        return
+
+    # Вызываем вспомогательную функцию поиска
+    await _search_game_impl(message, query, api_base_url, default_language)
+
+
+@router.message(StateFilter(GameSearchStates.waiting_for_game_name))
+async def process_game_name_input(
+    message: Message,
+    state: FSMContext,
+    api_base_url: str,
+    default_language: str
+) -> None:
+    """
+    Обрабатывает введенное пользователем название игры при поиске через меню.
+    """
+    user_id = message.from_user.id
+    user_name = message.from_user.full_name or str(user_id)
+    query = message.text.strip()
+
+    logger.info(f"User {user_name} (ID: {user_id}) entered game name via menu: {query}")
+
+    # Валидация названия игры
+    if not query:
+        await message.answer("❌ Название игры не должно быть пустым. Введите название игры:")
+        return
+
+    if len(query) > 200:
+        await message.answer("❌ Название игры слишком длинное (максимум 200 символов). Введите короче:")
+        return
+
+    # Очищаем состояние
+    await state.clear()
+
+    # Выполняем поиск игры
+    await _search_game_impl(message, query, api_base_url, default_language)
 
 
