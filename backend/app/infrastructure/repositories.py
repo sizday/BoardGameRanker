@@ -5,6 +5,12 @@ from typing import Dict, List, Any, Optional, Callable
 
 from sqlalchemy.orm import Session
 
+try:
+    from fuzzywuzzy import fuzz
+except ImportError:
+    logging.warning("fuzzywuzzy not installed, using basic string matching")
+    fuzz = None
+
 from app.config import config
 from app.domain.models import GameGenre
 from app.services.bgg import get_boardgame_details, search_boardgame
@@ -223,16 +229,24 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
     explicit_bgg_id = row.get("bgg_id")
     name = row.get("name")
 
-    if explicit_bgg_id:
-        logger.debug(f"Fetching BGG details by explicit ID: {explicit_bgg_id} for game: {name}")
-        result = get_boardgame_details(int(explicit_bgg_id))
-        # Задержка между запросами для избежания rate limiting
-        time.sleep(config.BGG_REQUEST_DELAY)
-        return result
-
+    # Всегда пытаемся найти игру в BGG
     if not name:
         logger.debug("No name provided in row, skipping BGG fetch")
         return None
+
+    # Сначала пробуем по explicit ID, если он указан
+    if explicit_bgg_id:
+        logger.debug(f"Fetching BGG details by explicit ID: {explicit_bgg_id} for game: {name}")
+        result = get_boardgame_details(int(explicit_bgg_id))
+        time.sleep(config.BGG_REQUEST_DELAY)
+
+        if result is not None:
+            return result
+        else:
+            logger.warning(f"Game '{name}' not found by ID {explicit_bgg_id}, will search by name")
+
+    # Если explicit ID не указан или не найден, ищем по имени
+    logger.debug(f"Searching BGG for game: {name}")
 
     logger.debug(f"Searching BGG for game: {name}")
     try:
@@ -266,35 +280,56 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
             logger.warning(f"❌ Failed to load details for any BGG candidates for game: '{name}' (found {len(found)} candidates)")
             return None
 
-        # Сортируем кандидатов по релевантности:
-        # 1. Сначала игры с точным совпадением названия (без учета регистра)
-        # 2. Затем ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет перед расширениями
-        # 3. Затем по мировому рейтингу (меньше число = выше рейтинг)
-        # 4. Наконец по количеству голосов (больше = лучше)
+        # Сортируем кандидатов по релевантности с использованием fuzzy matching:
+        # 1. Сначала игры с высокой схожестью названия (fuzzy ratio > 85)
+        # 2. Затем ОСНОВНЫЕ ИГРЫ имеют приоритет перед расширениями
+        # 3. Затем по схожести названия (fuzzy ratio)
+        # 4. Затем по мировому рейтингу (меньше число = выше)
+        # 5. Наконец по количеству голосов (больше = лучше)
         def sort_key(candidate: Dict[str, Any]) -> tuple:
-            candidate_name = (candidate.get("name") or '').lower()
-            query_name = name.lower()
-            exact_match = candidate_name == query_name
+            candidate_name = (candidate.get("name") or '').strip()
+            query_name_clean = name.strip()
 
-            # Дополнительная проверка: если название кандидата намного длиннее искомого,
-            # это может быть расширение или связанная игра (например, "Expansion for Game Name")
-            name_length_ratio = len(candidate_name) / len(query_name) if query_name else 1
-            is_likely_expansion = name_length_ratio > 2.0 and not exact_match  # Название в 2+ раза длиннее и не точное совпадение
+            # Используем fuzzy matching если доступна библиотека
+            if fuzz is not None:
+                # Рассчитываем схожесть с учетом сортировки слов
+                similarity_ratio = fuzz.token_sort_ratio(query_name_clean, candidate_name)
+                # Проверяем, содержит ли одно название другое
+                partial_ratio = fuzz.partial_ratio(query_name_clean.lower(), candidate_name.lower())
+                # Лучший из двух показателей
+                best_similarity = max(similarity_ratio, partial_ratio)
+            else:
+                # Fallback на простое сравнение без fuzzywuzzy
+                best_similarity = 100 if candidate_name.lower() == query_name_clean.lower() else 0
 
-            # Определяем приоритет по типу игры - ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет
+            # Определяем уровень схожести
+            is_high_similarity = best_similarity >= 85  # Очень похожие названия
+            is_medium_similarity = best_similarity >= 60  # Умеренно похожие
+
+            # Дополнительная проверка на расширения: если название кандидата намного длиннее,
+            # это может быть расширение или связанная игра
+            name_length_ratio = len(candidate_name) / len(query_name_clean) if query_name_clean else 1
+            is_likely_expansion = name_length_ratio > 1.5 and best_similarity < 95
+
+            # Определяем приоритет по типу игры
             game_type = candidate.get("type", "").lower()
-            is_base_game = game_type == "boardgame"  # Основная игра имеет приоритет
-            # Увеличиваем штраф для расширений и вероятно-расширений
-            game_type_priority = 0 if is_base_game else 1000000  # Огромный штраф для расширений
+            is_base_game = game_type == "boardgame"
+
+            # Создаем приоритеты:
+            # 1. Высокая схожесть названия (основной фактор)
+            similarity_priority = 0 if is_high_similarity else (1 if is_medium_similarity else 2)
+            # 2. Основные игры имеют приоритет перед расширениями
+            game_type_priority = 0 if is_base_game else 1000
             if is_likely_expansion:
-                game_type_priority += 500000  # Дополнительный штраф для вероятно-расширений
+                game_type_priority += 500
 
             rank = candidate.get("rank") or 999999
             users_rated = candidate.get("usersrated") or 0
 
             return (
-                0 if exact_match else 1,      # Точное совпадение первым
-                game_type_priority,           # ОСНОВНЫЕ ИГРЫ имеют абсолютный приоритет
+                similarity_priority,          # Высокая схожесть первым
+                game_type_priority,           # Основные игры имеют приоритет
+                -best_similarity,             # Лучшая схожесть (отрицательное для сортировки по убыванию)
                 rank,                         # Лучший рейтинг (меньше число = выше)
                 -users_rated                  # Больше голосов
             )
@@ -308,11 +343,33 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
             game_type = candidate.get("type", "unknown")
             rank = candidate.get("rank", "N/A")
             users_rated = candidate.get("usersrated", 0)
-            exact_match_indicator = "✓" if (candidate.get("name") or '').lower() == name.lower() else "✗"
-            sort_key_value = sort_key(candidate)
-            logger.info(f"  {i}. [{exact_match_indicator}] '{candidate.get('name')}' (ID: {candidate.get('id')}, Type: {game_type}, Rank: {rank}, Users: {users_rated}) | Sort key: {sort_key_value}")
 
-        logger.info(f"✅ Выбран кандидат: '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, Type: {best_candidate.get('type')}, Rank: {best_candidate.get('rank')})")
+            # Рассчитываем схожесть для логирования
+            candidate_name = (candidate.get("name") or '').strip()
+            query_name_clean = name.strip()
+            if fuzz is not None:
+                similarity = max(
+                    fuzz.token_sort_ratio(query_name_clean, candidate_name),
+                    fuzz.partial_ratio(query_name_clean.lower(), candidate_name.lower())
+                )
+            else:
+                similarity = 100 if candidate_name.lower() == query_name_clean.lower() else 0
+
+            similarity_indicator = f"{similarity}%"
+            sort_key_value = sort_key(candidate)
+            logger.info(f"  {i}. [{similarity_indicator}] '{candidate.get('name')}' (ID: {candidate.get('id')}, Type: {game_type}, Rank: {rank}, Users: {users_rated}) | Sort key: {sort_key_value}")
+
+        # Рассчитываем схожесть лучшего кандидата для логирования
+        best_candidate_name = (best_candidate.get("name") or '').strip()
+        if fuzz is not None:
+            best_similarity = max(
+                fuzz.token_sort_ratio(name.strip(), best_candidate_name),
+                fuzz.partial_ratio(name.strip().lower(), best_candidate_name.lower())
+            )
+        else:
+            best_similarity = 100 if best_candidate_name.lower() == name.strip().lower() else 0
+
+        logger.info(f"✅ Выбран кандидат: '{best_candidate.get('name')}' (ID: {best_candidate.get('id')}, Type: {best_candidate.get('type')}, Rank: {best_candidate.get('rank')}, Similarity: {best_similarity}%)")
 
         return best_candidate
 
@@ -453,7 +510,10 @@ def replace_all_from_table(
             if _should_update_game(game, is_forced_update):
                 details = _fetch_bgg_details_for_row(row)
                 if details:
-                    game.bgg_id = details.get("id")
+                    # Обновляем bgg_id если он изменился (или был None)
+                    if details.get("id") != game.bgg_id:
+                        logger.info(f"Updated BGG ID for game '{name}': {game.bgg_id} -> {details.get('id')}")
+                        game.bgg_id = details.get("id")
                     game.bgg_rank = details.get("rank")
                     game.yearpublished = details.get("yearpublished")
                     game.bayesaverage = details.get("bayesaverage")
