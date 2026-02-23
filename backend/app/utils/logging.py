@@ -49,8 +49,8 @@ def setup_logging(log_level: Optional[str] = None) -> None:
     
     # Настройка уровней для наших модулей
     logging.getLogger("app").setLevel(level)
-    logging.getLogger("app.services.bgg").setLevel(logging.DEBUG if config.DEBUG else logging.INFO)
-    logging.getLogger("app.api.bgg").setLevel(logging.DEBUG if config.DEBUG else logging.INFO)
+    logging.getLogger("app.services.bgg").setLevel(level)
+    logging.getLogger("app.api.bgg").setLevel(level)
     
     logger = logging.getLogger(__name__)
     logger.info(f"Logging configured with level: {level}")

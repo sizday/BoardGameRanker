@@ -239,10 +239,12 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
 
     logger.debug(f"Searching BGG for game: {name}")
     try:
-        found = search_boardgame(name, exact=False)
+        found = search_boardgame(name, exact=True)
         if not found:
-            logger.warning(f"❌ No BGG search results found for game: '{name}'")
-            return None
+            found = search_boardgame(name, exact=False)
+            if not found:
+                logger.warning(f"❌ No BGG search results found for game: '{name}'")
+                return None
 
         # Получаем детали для большего количества кандидатов для выбора лучшего
         candidates_limit = min(len(found), 5)  # Берем до 5 кандидатов для сортировки
