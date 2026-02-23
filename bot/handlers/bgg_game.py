@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import httpx
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,6 @@ async def _search_game_impl(
     default_language: str,
     state: FSMContext = None,
     use_menu_editing: bool = False,
-    old_menu_id: int = None
 ) -> None:
     """
     Вспомогательная функция для поиска игры по названию.
@@ -48,8 +47,6 @@ async def _search_game_impl(
     try:
         async with httpx.AsyncClient() as client:
             # Сначала ищем в базе данных
-            logger.debug(f"Searching in database first: {query}")
-
             resp = await client.get(
                 f"{api_base_url}/api/games/search",
                 params={"name": query, "exact": False, "limit": 1},
@@ -64,11 +61,9 @@ async def _search_game_impl(
                 # Нашли в базе данных
                 game = games_db[0]
                 search_source = "database"
-                logger.info(f"Found game in database: {game.get('name')} (id: {game.get('id')})")
+                logger.info(f"Found game in database: {game.get('name')}")
             else:
                 # Не нашли в БД, ищем на BGG
-                logger.info(f"Game not found in database, searching BGG: {query}")
-
                 resp = await client.get(
                     f"{api_base_url}/api/bgg/search",
                     params={"name": query, "exact": False, "limit": 1},
@@ -82,7 +77,7 @@ async def _search_game_impl(
                 if games_bgg:
                     game = games_bgg[0]
                     search_source = "bgg"
-                    logger.info(f"Found game on BGG: {game.get('name')} (rank: {game.get('rank')})")
+                    logger.info(f"Found game on BGG: {game.get('name')} (rank: #{game.get('rank')})")
 
                     # Сохраняем игру в базу данных для будущих запросов
                     try:
@@ -97,25 +92,19 @@ async def _search_game_impl(
                                 timeout=10.0,
                             )
                             save_resp.raise_for_status()
-                            logger.info(f"Successfully saved game to database: {game.get('name')}")
-
-                            # После сохранения используем данные из ответа API (уже содержат перевод)
-                            save_data = save_resp.json()
-                            game = save_data  # Обновляем данные игры данными из ответа сохранения
-                            logger.info(f"✅ Using saved game data with translation for: {game.get('name')} (has_ru: {'description_ru' in game and game['description_ru'] is not None})")
                     except Exception as save_exc:
                         logger.warning(f"Failed to save game to database: {save_exc}")
                         # Продолжаем работу, даже если сохранение не удалось
                 else:
                     logger.info(f"No games found for query: {query}")
                     if use_menu_editing and state:
-                        from .menu import create_back_to_menu_keyboard, update_main_menu, update_main_menu_from_message
+                        from .menu_keyboards import create_back_to_menu_keyboard
                         back_keyboard = create_back_to_menu_keyboard()
                         error_text = "Не нашёл игр с таким названием 😔"
                         if isinstance(message_or_callback, CallbackQuery):
-                            await update_main_menu(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                            await message_or_callback.message.answer(error_text, reply_markup=back_keyboard)
                         else:
-                            await update_main_menu_from_message(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                            await message_or_callback.answer(error_text, reply_markup=back_keyboard)
                     else:
                         # Определяем, как отправить сообщение в зависимости от типа объекта
                         if isinstance(message_or_callback, CallbackQuery):
@@ -127,13 +116,13 @@ async def _search_game_impl(
     except httpx.HTTPStatusError as exc:
         logger.error(f"HTTP error searching for game '{query}': {exc.response.status_code}")
         if use_menu_editing and state:
-            from .menu import create_back_to_menu_keyboard, update_main_menu, update_main_menu_from_message
+            from .menu_keyboards import create_back_to_menu_keyboard
             back_keyboard = create_back_to_menu_keyboard()
             error_text = f"Ошибка при запросе к backend: {exc.response.status_code}"
             if isinstance(message_or_callback, CallbackQuery):
-                await update_main_menu(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                await message_or_callback.message.answer(error_text, reply_markup=back_keyboard)
             else:
-                await update_main_menu_from_message(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                await message_or_callback.answer(error_text, reply_markup=back_keyboard)
         else:
             # Определяем, как отправить сообщение в зависимости от типа объекта
             if isinstance(message_or_callback, CallbackQuery):
@@ -144,13 +133,13 @@ async def _search_game_impl(
     except Exception as exc:  # noqa: BLE001
         logger.error(f"Error searching for game '{query}': {exc}", exc_info=True)
         if use_menu_editing and state:
-            from .menu import create_back_to_menu_keyboard, update_main_menu, update_main_menu_from_message
+            from .menu_keyboards import create_back_to_menu_keyboard
             back_keyboard = create_back_to_menu_keyboard()
             error_text = f"Не удалось получить данные об игре: {exc}"
             if isinstance(message_or_callback, CallbackQuery):
-                await update_main_menu(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                await message_or_callback.message.answer(error_text, reply_markup=back_keyboard)
             else:
-                await update_main_menu_from_message(message_or_callback, state, text=error_text, reply_markup=back_keyboard)
+                await message_or_callback.answer(error_text, reply_markup=back_keyboard)
         else:
             # Определяем, как отправить сообщение в зависимости от типа объекта
             if isinstance(message_or_callback, CallbackQuery):
@@ -179,17 +168,12 @@ async def _search_game_impl(
     description = game.get("description")
 
     # Выбираем описание в зависимости от языка
-    original_lang = "en"
     if default_language == "ru":
         description_ru = game.get("description_ru")
         if description_ru:
             description = description_ru
-            original_lang = "ru"
-            logger.debug(f"🌍 Using Russian description for game: {name}")
-        else:
-            logger.debug(f"🌍 No Russian description available for game: {name}, using English")
 
-    logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank}, lang: {original_lang})")
+    logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank})")
 
     # Формируем название с ссылкой на BGG, если есть bgg_id
     if bgg_id:
@@ -214,7 +198,7 @@ async def _search_game_impl(
         lines.append(f"Мировой рейтинг BGG: #{rank}")
     if avg is not None:
         try:
-            lines.append(f"Оценка (avg): {float(avg):.2f}")
+            lines.append(f"Оценка (avg): {avg:.2f}")
         except Exception:  # noqa: BLE001
             pass
     if bayes is not None:
@@ -223,7 +207,7 @@ async def _search_game_impl(
         lines.append(f"Голосов: {users}")
     if weight is not None:
         try:
-            lines.append(f"Сложность (weight): {float(weight):.2f}/5")
+            lines.append(f"Сложность (weight): {weight:.2f}/5")
         except Exception:  # noqa: BLE001
             pass
     if categories:
@@ -242,64 +226,23 @@ async def _search_game_impl(
     text = "\n".join(lines)
 
     # Импортируем функции меню для редактирования
-    from .menu import create_back_to_menu_keyboard, update_main_menu, update_main_menu_from_message
+    from .menu_keyboards import create_back_to_menu_keyboard
 
     if use_menu_editing and state:
-        # Пытаемся отредактировать существующее главное меню
+        # Отправляем новое сообщение с результатом
         back_keyboard = create_back_to_menu_keyboard()
         if isinstance(message_or_callback, CallbackQuery):
-            # Настоящий callback - используем update_main_menu
+            # Отправляем новое сообщение вместо редактирования
             if image:
-                # Для изображений отправляем новое сообщение, так как edit_message_media требует специальной обработки
                 await message_or_callback.message.answer_photo(photo=image, caption=text, reply_markup=back_keyboard)
             else:
-                await update_main_menu(message_or_callback, state, text=text, reply_markup=back_keyboard)
+                await message_or_callback.message.answer(text, reply_markup=back_keyboard)
         else:
-            # Обычное сообщение - пытаемся удалить/отредактировать главное меню по old_menu_id
-            from .menu import MAIN_MENU_MESSAGE_ID_KEY
-            if old_menu_id:
-                menu_updated = False
-                # Сначала пытаемся удалить
-                try:
-                    await message_or_callback.bot.delete_message(
-                        chat_id=message_or_callback.chat.id,
-                        message_id=old_menu_id
-                    )
-                    logger.info(f"Deleted old main menu message {old_menu_id} for game result")
-                    menu_updated = True
-                except Exception as delete_e:
-                    # Неудачное удаление - нормально для старых сообщений
-                    # Если не можем удалить, пытаемся отредактировать
-                    try:
-                        if not image:  # Только для текстовых сообщений
-                            await message_or_callback.bot.edit_message_text(
-                                chat_id=message_or_callback.chat.id,
-                                message_id=old_menu_id,
-                                text=text,
-                                reply_markup=back_keyboard
-                            )
-                            logger.info(f"Edited old main menu message {old_menu_id} for game result")
-                            menu_updated = True
-                            await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: old_menu_id})
-                    except Exception as edit_e:
-                        # Неудачное редактирование - тоже нормально для старых сообщений
-                        pass
-
-                if not menu_updated:
-                    # Если ничего не удалось, отправляем новое сообщение
-                    if image:
-                        new_menu = await message_or_callback.answer_photo(photo=image, caption=text, reply_markup=back_keyboard)
-                    else:
-                        new_menu = await message_or_callback.answer(text, reply_markup=back_keyboard)
-                    await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
-                    logger.info(f"Sent new message for game result (fallback)")
+            # Отправляем новое сообщение
+            if image:
+                await message_or_callback.answer_photo(photo=image, caption=text, reply_markup=back_keyboard)
             else:
-                # Нет old_menu_id, отправляем новое сообщение
-                if image:
-                    new_menu = await message_or_callback.answer_photo(photo=image, caption=text, reply_markup=back_keyboard)
-                else:
-                    new_menu = await message_or_callback.answer(text, reply_markup=back_keyboard)
-                await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
+                await message_or_callback.answer(text, reply_markup=back_keyboard)
     else:
         # Обычная отправка сообщений
         if isinstance(message_or_callback, CallbackQuery):
@@ -321,19 +264,15 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
     Сначала ищет игру в базе данных, если не найдена - обращается к BGG API.
     Возвращает полную информацию и картинку.
     """
-    user_id = message.from_user.id
-    user_name = message.from_user.full_name or str(user_id)
 
     # Ожидаем, что пользователь напишет: /game Название игры
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2:
-        logger.debug(f"User {user_name} sent /game without query")
         await message.answer("Пожалуйста, укажи название игры. Пример:\n/game Terraforming Mars")
         return
 
     query = parts[1].strip()
     if not query:
-        logger.debug(f"User {user_name} sent empty game query")
         await message.answer("Название игры не должно быть пустым.")
         return
 
@@ -359,111 +298,25 @@ async def process_game_name_input(
 
     # Валидация названия игры
     if not query:
-        # Импортируем функции
-        from .menu import create_back_to_menu_keyboard, MAIN_MENU_MESSAGE_ID_KEY
-
-        # Пытаемся отредактировать существующее главное меню
-        data = await state.get_data()
-        main_menu_message_id = data.get(MAIN_MENU_MESSAGE_ID_KEY)
+        # Отправляем новое сообщение
+        from .menu_keyboards import create_back_to_menu_keyboard
         error_text = "❌ Название игры не должно быть пустым. Введите название игры:"
         back_keyboard = create_back_to_menu_keyboard()
-        if main_menu_message_id:
-            try:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=main_menu_message_id,
-                    text=error_text,
-                    reply_markup=back_keyboard
-                )
-                logger.info(f"Successfully edited main menu message {main_menu_message_id} (empty game name)")
-            except Exception as exc:
-                # Неудачное редактирование - нормально для старых сообщений
-                # Если не удалось отредактировать, отправляем новое сообщение
-                new_menu = await message.answer(error_text, reply_markup=back_keyboard)
-                await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
-        else:
-            # Отправляем новое сообщение
-            new_menu = await message.answer(error_text, reply_markup=back_keyboard)
-            await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
-
-        # Пытаемся удалить сообщение пользователя
-        try:
-            await message.bot.delete_message(
-                chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-            logger.info(f"Deleted user message {message.message_id} (empty game name)")
-        except Exception as delete_exc:
-            # Неудачное удаление сообщения пользователя - нормально
-            pass
-
-        # Очищаем состояние
-        await state.clear()
+        await message.answer(error_text, reply_markup=back_keyboard)
 
         return
 
     if len(query) > 200:
-        # Импортируем функции
-        from .menu import create_back_to_menu_keyboard, MAIN_MENU_MESSAGE_ID_KEY
-
-        # Пытаемся отредактировать существующее главное меню
-        data = await state.get_data()
-        main_menu_message_id = data.get(MAIN_MENU_MESSAGE_ID_KEY)
+        # Отправляем новое сообщение
+        from .menu_keyboards import create_back_to_menu_keyboard
         error_text = "❌ Название игры слишком длинное (максимум 200 символов). Введите короче:"
         back_keyboard = create_back_to_menu_keyboard()
-        if main_menu_message_id:
-            try:
-                await message.bot.edit_message_text(
-                    chat_id=message.chat.id,
-                    message_id=main_menu_message_id,
-                    text=error_text,
-                    reply_markup=back_keyboard
-                )
-                logger.info(f"Successfully edited main menu message {main_menu_message_id} (game name too long)")
-            except Exception as exc:
-                # Неудачное редактирование - нормально для старых сообщений
-                # Если не удалось отредактировать, отправляем новое сообщение
-                new_menu = await message.answer(error_text, reply_markup=back_keyboard)
-                await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
-        else:
-            # Отправляем новое сообщение
-            new_menu = await message.answer(error_text, reply_markup=back_keyboard)
-            await state.update_data({MAIN_MENU_MESSAGE_ID_KEY: new_menu.message_id})
-
-        # Пытаемся удалить сообщение пользователя
-        try:
-            await message.bot.delete_message(
-                chat_id=message.chat.id,
-                message_id=message.message_id
-            )
-            logger.info(f"Deleted user message {message.message_id} (game name too long)")
-        except Exception as delete_exc:
-            # Неудачное удаление сообщения пользователя - нормально
-            pass
-
-        # Очищаем состояние
-        await state.clear()
+        await message.answer(error_text, reply_markup=back_keyboard)
 
         return
 
-    # Сохраняем старый message_id главного меню перед очисткой состояния
-    data = await state.get_data()
-    old_main_menu_message_id = data.get("main_menu_message_id")
-
-    # Выполняем поиск игры в режиме редактирования меню
-    logger.info(f"Starting game search for '{query}' with old_menu_id={old_main_menu_message_id} (this should be the search instruction message)")
-    await _search_game_impl(message, query, api_base_url, default_language, state, use_menu_editing=True, old_menu_id=old_main_menu_message_id)
-
-    # Удаляем сообщение пользователя после успешного поиска
-    try:
-        await message.bot.delete_message(
-            chat_id=message.chat.id,
-            message_id=message.message_id
-        )
-        logger.info(f"Deleted user message {message.message_id} after successful game search")
-    except Exception as delete_exc:
-        # Неудачное удаление - нормально
-        pass
+    # Выполняем поиск игры
+    await _search_game_impl(message, query, api_base_url, default_language, state, use_menu_editing=True)
 
     await state.clear()
     return

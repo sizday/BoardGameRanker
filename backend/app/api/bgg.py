@@ -136,6 +136,3 @@ async def bgg_search(name: str, exact: bool = False, limit: int = 5) -> BGGSearc
     except Exception as exc:  # noqa: BLE001
         logger.error(f"Error accessing BGG API: {exc}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Error accessing BGG API: {exc}")
-
-
-

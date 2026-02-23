@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import httpx
-from aiogram import Router, F
+from aiogram import Router
 from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -39,10 +39,6 @@ async def cmd_login(message: Message, state: FSMContext, api_base_url: str) -> N
             )
 
             if response.status_code == 200:
-                # Пользователь уже зарегистрирован
-                user_data = response.json()
-                current_name = "Неизвестно"  # В текущем API нет информации об имени в этом эндпоинте
-
                 # Получаем информацию о пользователе другим способом
                 # Пока что просто предложим изменить имя
                 await message.answer(

@@ -32,49 +32,39 @@ class GameItem(BaseModel):
     image: str | None = None
     thumbnail: str | None = None
 
-
-class RankGamesRequest(BaseModel):
-    games: List[GameItem]
-    top_n: int = 50
-
-
-class RankGamesResponse(BaseModel):
-    ranked_games: List[GameItem]
-
-
-class RankingStartRequest(BaseModel):
-    user_id: str
-
-
-class RankingStartResponse(BaseModel):
-    session_id: int
-    game: GameItem
-
-
-class RankingAnswerRequest(BaseModel):
-    session_id: int
-    game_id: int
-    tier: str
-
-
-class RankingAnswerResponse(BaseModel):
-    phase: str
-    next_game: GameItem | None = None
-    top: List[GameItem] | None = None
-    message: str = ""
-
-
-@router.post("/rank", response_model=RankGamesResponse, tags=["ranking"])
-async def rank_games_endpoint(request: RankGamesRequest):
-    """
-    Rank games based on provided list using comparison algorithm.
-
     Returns top N games from the provided list, ranked by preference.
     """
     logger.info(f"Ranking request received: {len(request.games)} games, top_n={request.top_n}")
     games = [Game(id=item.id, name=item.name) for item in request.games]
     ranking_request = RankingRequest(games=games, top_n=request.top_n)
 
+class RankGamesRequest(BaseModel):
+    games: List[GameItem]
+    top_n: int = 50
+
+    Initializes a new ranking session and returns the first set of games
+    to compare for tier classification.
+    """
+    logger.info(f"Starting ranking session for user_id: {request.user_id}")
+    if not request.user_id:
+        logger.warning("Ranking start request without user_id")
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+class RankGamesResponse(BaseModel):
+    ranked_games: List[GameItem]
+
+    Records user's tier classification (bad/good/excellent) for a game
+    in the current ranking session.
+    """
+    logger.debug(f"First tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
+    if request.session_id is None or request.game_id is None or request.tier is None:
+        logger.warning("First tier answer request with missing required fields")
+        raise HTTPException(
+            status_code=400, detail="session_id, game_id, and tier are required"
+        )
+
+class RankingStartRequest(BaseModel):
+    user_id: str
     result = rank_games(ranking_request)
     logger.info(f"Ranking completed: {len(result.ranked_games)} games ranked")
 
@@ -101,73 +91,30 @@ async def rank_games_endpoint(request: RankGamesRequest):
     )
 
 
+
+@router.post("/rank", response_model=RankGamesResponse, tags=["ranking"])
+async def rank_games_endpoint(request: RankGamesRequest):
+    """
+    Rank games based on provided list using comparison algorithm.
+    service = RankingService(db)
+    try:
+        data = service.answer_second_tier(
+            session_id=request.session_id,
+            game_id=request.game_id,
+            tier=tier,
+        )
+        db.commit()
+        logger.info(f"Second tier answer processed: session_id={request.session_id}, phase={data.get('phase')}, answered={data.get('answered', 0)}/{data.get('total', 0)}")
 @router.post("/ranking/start", response_model=RankingStartResponse, tags=["ranking"])
 async def ranking_start(request: RankingStartRequest, db: Session = Depends(get_db)):
     """
     Start an interactive ranking session for a user.
 
-    Initializes a new ranking session and returns the first set of games
-    to compare for tier classification.
-    """
-    logger.info(f"Starting ranking session for user_id: {request.user_id}")
-    if not request.user_id:
-        logger.warning("Ranking start request without user_id")
-        raise HTTPException(status_code=400, detail="user_id is required")
+class RankingStartResponse(BaseModel):
+    session_id: int
+    game: GameItem
 
-    service = RankingService(db)
     try:
-        # Получаем имя пользователя по user_id для обратной совместимости с RankingService
-        from app.infrastructure.models import UserModel
-        from uuid import UUID
-        user = db.query(UserModel).filter(UserModel.id == UUID(request.user_id)).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        data = service.start_session(user_name=user.name)
-        db.commit()
-        logger.info(f"Ranking session started: session_id={data['session_id']}, total_games={data.get('total_games', 0)}")
-        return RankingStartResponse(
-            session_id=data["session_id"],
-            game=GameItem(
-                id=data["game"]["id"],
-                name=data["game"]["name"],
-                usersrated=data["game"].get("usersrated"),
-                yearpublished=data["game"].get("yearpublished"),
-                bgg_rank=data["game"].get("bgg_rank"),
-                average=data["game"].get("average"),
-                bayesaverage=data["game"].get("bayesaverage"),
-                averageweight=data["game"].get("averageweight"),
-                minplayers=data["game"].get("minplayers"),
-                maxplayers=data["game"].get("maxplayers"),
-                playingtime=data["game"].get("playingtime"),
-                minage=data["game"].get("minage"),
-                image=data["game"].get("image"),
-                thumbnail=data["game"].get("thumbnail"),
-            ),
-        )
-    except Exception as exc:  # noqa: BLE001
-        db.rollback()
-        logger.error(f"Error starting ranking session for user_id {request.user_id}: {exc}", exc_info=True)
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.post("/ranking/answer-first", response_model=RankingAnswerResponse, tags=["ranking"])
-async def ranking_answer_first(
-    request: RankingAnswerRequest, db: Session = Depends(get_db)
-):
-    """
-    Submit user answer for first tier ranking.
-
-    Records user's tier classification (bad/good/excellent) for a game
-    in the current ranking session.
-    """
-    logger.debug(f"First tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
-    if request.session_id is None or request.game_id is None or request.tier is None:
-        logger.warning("First tier answer request with missing required fields")
-        raise HTTPException(
-            status_code=400, detail="session_id, game_id, and tier are required"
-        )
-
     try:
         tier = FirstTier(request.tier)
     except ValueError:
@@ -234,24 +181,6 @@ async def ranking_answer_first(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.post("/ranking/answer-second", response_model=RankingAnswerResponse, tags=["ranking"])
-async def ranking_answer_second(
-    request: RankingAnswerRequest, db: Session = Depends(get_db)
-):
-    """
-    Submit user answer for second tier ranking.
-
-    Records user's refined tier classification (super_cool/cool/excellent)
-    for a game in the current ranking session.
-    """
-    logger.debug(f"Second tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
-    if request.session_id is None or request.game_id is None or request.tier is None:
-        logger.warning("Second tier answer request with missing required fields")
-        raise HTTPException(
-            status_code=400, detail="session_id, game_id, and tier are required"
-        )
-
-    try:
         tier = SecondTier(request.tier)
     except ValueError:
         logger.warning(f"Invalid tier value: {request.tier}")
@@ -259,15 +188,10 @@ async def ranking_answer_second(
             status_code=400, detail=f"Некорректное значение tier: {request.tier}"
         )
 
-    service = RankingService(db)
-    try:
-        data = service.answer_second_tier(
-            session_id=request.session_id,
-            game_id=request.game_id,
-            tier=tier,
-        )
-        db.commit()
-        logger.info(f"Second tier answer processed: session_id={request.session_id}, phase={data.get('phase')}, answered={data.get('answered', 0)}/{data.get('total', 0)}")
+class RankingAnswerRequest(BaseModel):
+    session_id: int
+    game_id: int
+    tier: str
 
         # Build response
         response_data: dict = {"phase": data.get("phase")}
@@ -318,3 +242,68 @@ async def ranking_answer_second(
 
 
 
+    service = RankingService(db)
+    try:
+        # Получаем имя пользователя по user_id для обратной совместимости с RankingService
+        from app.infrastructure.models import UserModel
+        from uuid import UUID
+        user = db.query(UserModel).filter(UserModel.id == UUID(request.user_id)).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        data = service.start_session(user_name=user.name)
+        db.commit()
+        logger.info(f"Ranking session started: session_id={data['session_id']}, total_games={data.get('total_games', 0)}")
+        return RankingStartResponse(
+            session_id=data["session_id"],
+            game=GameItem(
+                id=data["game"]["id"],
+                name=data["game"]["name"],
+                usersrated=data["game"].get("usersrated"),
+                yearpublished=data["game"].get("yearpublished"),
+                bgg_rank=data["game"].get("bgg_rank"),
+                average=data["game"].get("average"),
+                bayesaverage=data["game"].get("bayesaverage"),
+                averageweight=data["game"].get("averageweight"),
+                minplayers=data["game"].get("minplayers"),
+                maxplayers=data["game"].get("maxplayers"),
+                playingtime=data["game"].get("playingtime"),
+                minage=data["game"].get("minage"),
+                image=data["game"].get("image"),
+                thumbnail=data["game"].get("thumbnail"),
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.error(f"Error starting ranking session for user_id {request.user_id}: {exc}", exc_info=True)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ranking/answer-first", response_model=RankingAnswerResponse, tags=["ranking"])
+async def ranking_answer_first(
+    request: RankingAnswerRequest, db: Session = Depends(get_db)
+):
+    """
+    Submit user answer for first tier ranking.
+
+    Records user's refined tier classification (super_cool/cool/excellent)
+    for a game in the current ranking session.
+    """
+    logger.debug(f"Second tier answer: session_id={request.session_id}, game_id={request.game_id}, tier={request.tier}")
+    if request.session_id is None or request.game_id is None or request.tier is None:
+        logger.warning("Second tier answer request with missing required fields")
+        raise HTTPException(
+            status_code=400, detail="session_id, game_id, and tier are required"
+        )
+
+class RankingAnswerResponse(BaseModel):
+    phase: str
+@router.post("/ranking/answer-second", response_model=RankingAnswerResponse, tags=["ranking"])
+async def ranking_answer_second(
+    request: RankingAnswerRequest, db: Session = Depends(get_db)
+):
+    """
+    Submit user answer for second tier ranking.
+    next_game: GameItem | None = None
+    top: List[GameItem] | None = None
+    message: str = ""

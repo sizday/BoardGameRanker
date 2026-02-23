@@ -7,12 +7,11 @@ setup_logging()
 app = FastAPI(title="Board Game Ranker API")
 
 # Подключаем API роутеры
-from app.api.routes import router as api_router
-app.include_router(api_router, prefix="/api")
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
+from app.api.routes import router as api_router
+app.include_router(api_router, prefix="/api")
 
 # Start the server
 import uvicorn

@@ -36,3 +36,4 @@ def init_db() -> None:
     logger.info("Database tables initialized")
 
 
+

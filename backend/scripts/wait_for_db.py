@@ -30,4 +30,3 @@ for i in range(30):
 
 logger.error("Database connection timeout!")
 sys.exit(1)
-

@@ -82,8 +82,55 @@ def build_final_top_ids(
             excellent.append(game_id)
 
     ordered = super_cool + cool + excellent
+def merge_ordered_groups(
+    group_orders: Dict[SecondTier, List[int]],
+    group_priority: Sequence[SecondTier],
+    top_n: int = 50,
+    for tier in group_priority:
+        ids = group_orders.get(tier) or []
+        for game_id in ids:
+            if game_id in result:
+                # избегаем дубликатов, если игра случайно попала в две группы
+                continue
+            result.append(game_id)
+            if len(result) >= top_n:
+                return result
+
+    return result[:top_n]
+
+
+) -> List[int]:
+    """
+    Этап 5: объединяем мини-группы, уже отсортированные пользователем внутри,
+    в один общий список id игр.
     return ordered[:top_n]
 
+def apply_swaps(order: List[int], swaps: Iterable[Tuple[int, int]]) -> List[int]:
+    """
+    Этап 6: применяет список обменов позиций к уже сформированному топу.
+    swaps: список пар (i, j), где i и j — позиции (1-based),
+    for i, j in swaps:
+        i_idx = i - 1
+        j_idx = j - 1
+        if (
+            i_idx < 0
+            or j_idx < 0
+            or i_idx >= len(result)
+            or j_idx >= len(result)
+        ):
+            continue
+        result[i_idx], result[j_idx] = result[j_idx], result[i_idx]
+
+    return result
+
+    group_orders: словарь tier -> список id игр в нужном порядке.
+    group_priority: порядок приоритета групп (сильная -> слабая).
+    """
+    result: List[int] = []
+
+           которые пользователь попросил поменять местами.
+    """
+    result = list(order)
 
 def merge_ordered_groups(
     group_orders: Dict[SecondTier, List[int]],

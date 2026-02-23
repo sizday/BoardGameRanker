@@ -66,7 +66,6 @@ def setup_logging(log_level: Optional[str] = None) -> None:
 def get_logger(name: str) -> logging.Logger:
     """
     Получить логгер с указанным именем.
-    
     :param name: Имя логгера (обычно __name__)
     :return: Настроенный логгер
     """
