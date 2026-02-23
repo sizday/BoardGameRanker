@@ -217,27 +217,21 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
 
     # Отправляем данные в backend с повторными попытками
     logger.info(f"Sending {len(data_rows)} games to backend API")
-    max_retries = 1
-    for attempt in range(max_retries):
-        try:
-            logger.info(f"Sending data to backend (attempt {attempt + 1}/{max_retries})")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{api_base_url}/api/import-table",
-                    json={"rows": data_rows},
-                    timeout=120.0,  # Увеличиваем таймаут для импорта
-                )
-                resp.raise_for_status()
-                backend_response = resp.json()
-                logger.info(f"Backend response: {backend_response}")
-            logger.info(f"Successfully sent data to backend on attempt {attempt + 1}")
-            break  # Успешно отправили данные
-        except Exception as e:
-            logger.error(f"Attempt {attempt + 1} failed: {e}")
-            if attempt == max_retries - 1:
-                logger.error(f"Не удалось отправить данные в backend после {max_retries} попыток")
-                raise RuntimeError(f"Не удалось отправить данные в backend после {max_retries} попыток")
-            time.sleep(2 ** attempt)  # Экспоненциальная задержка
+
+    try:
+        logger.info(f"Sending data to backend")
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"{api_base_url}/api/import-table",
+                json={"rows": data_rows},
+                timeout=120.0,  # Увеличиваем таймаут для импорта
+            )
+            resp.raise_for_status()
+            backend_response = resp.json()
+            logger.info(f"Backend response: {backend_response}")
+        logger.info(f"Successfully sent data to backend") # Успешно отправили данные
+    except Exception as e:
+        logger.error(f"Send data failed: {e}")
 
     return len(data_rows)
 
