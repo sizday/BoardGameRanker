@@ -113,6 +113,7 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
 
     # Извлекаем данные игры (работает для обоих источников)
     name = game.get("name") or "Без названия"
+    bgg_id = game.get("id") or game.get("bgg_id")
     year = game.get("yearpublished")
     minplayers = game.get("minplayers")
     maxplayers = game.get("maxplayers")
@@ -142,7 +143,14 @@ async def cmd_game(message: Message, api_base_url: str, default_language: str) -
 
     logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank}, lang: {original_lang})")
 
-    lines = [f"<b>{name}</b>"]
+    # Формируем название с ссылкой на BGG, если есть bgg_id
+    if bgg_id:
+        bgg_url = f"https://boardgamegeek.com/boardgame/{bgg_id}"
+        game_title = f'<b><a href="{bgg_url}">{name}</a></b>'
+    else:
+        game_title = f"<b>{name}</b>"
+
+    lines = [game_title]
     if year:
         lines.append(f"Год: {year}")
     if minplayers or maxplayers:
