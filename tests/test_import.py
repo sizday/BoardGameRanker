@@ -1,129 +1,159 @@
-#!/usr/bin/env python3
 """
-Test script for import functionality
+Unit and integration tests for import functionality
 """
-import asyncio
-import sys
 import json
+import pytest
 from pathlib import Path
+from unittest.mock import patch, Mock
 
-# Добавляем корень проекта в sys.path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from backend.app.api.import_table import ImportTableRequest
 
 
-async def test_import_from_test_data():
-    """Test import using local test data"""
-    print("📊 Testing import functionality with test data...")
+@pytest.fixture
+def test_data_path():
+    """Path to test data file"""
+    return Path(__file__).parent / "test_payload.json"
 
-    try:
-        # Load test data
-        test_data_path = project_root / "tests" / "test_payload.json"
-        with open(test_data_path, 'r', encoding='utf-8') as f:
-            test_data = json.load(f)
 
-        print(f"✅ Test data loaded: {len(test_data['rows'])} games")
+@pytest.fixture
+def sample_import_data(test_data_path):
+    """Load sample import data"""
+    with open(test_data_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
-        # Import the data using backend API directly
-        sys.path.insert(0, str(project_root / 'backend'))
-        from app.infrastructure.repositories import replace_all_from_table
-        from app.infrastructure.db import get_db_session
 
-        # This would require a database connection
-        # For now, just test that the data structure is valid
-        rows = test_data['rows']
+class TestImportDataValidation:
+    """Test validation of import data structure"""
+
+    def test_sample_data_structure(self, sample_import_data):
+        """Test that sample import data has correct structure"""
+        assert "rows" in sample_import_data
+        assert isinstance(sample_import_data["rows"], list)
+        assert len(sample_import_data["rows"]) > 0
+
+        # Check first row structure
+        first_row = sample_import_data["rows"][0]
+        required_fields = ['name', 'genre', 'ratings']
+
+        for field in required_fields:
+            assert field in first_row, f"Missing required field '{field}' in test data"
+
+    def test_sample_data_content(self, sample_import_data):
+        """Test sample data content"""
+        rows = sample_import_data["rows"]
+
         for row in rows:
-            required_fields = ['name', 'genre', 'ratings']
-            for field in required_fields:
-                if field not in row:
-                    raise ValueError(f"Missing required field '{field}' in test data")
+            # Name should be non-empty string
+            assert isinstance(row["name"], str)
+            assert len(row["name"].strip()) > 0
 
-        print("✅ Test data structure is valid")
-        print(f"   Games to import: {len(rows)}")
+            # Genre should be string
+            assert isinstance(row["genre"], str)
 
-        # Show sample data
-        sample = rows[0]
-        print(f"   Sample game: {sample['name']}")
-        print(f"   Genre: {sample['genre']}")
-        print(f"   Ratings count: {len(sample['ratings'])}")
+            # Ratings should be dict
+            assert isinstance(row["ratings"], dict)
+            assert len(row["ratings"]) > 0
 
-        return True
+    def test_sample_data_ratings(self, sample_import_data):
+        """Test ratings data in sample import"""
+        rows = sample_import_data["rows"]
 
-    except Exception as e:
-        print(f"❌ Import test failed: {e}")
-        return False
+        for row in rows:
+            ratings = row["ratings"]
+            assert isinstance(ratings, dict)
+
+            # Check that ratings are integers 0-50
+            for user, rating in ratings.items():
+                assert isinstance(user, str)
+                assert isinstance(rating, int)
+                assert 0 <= rating <= 50
 
 
-async def test_api_import_simulation():
-    """Test API import endpoint simulation"""
-    print("🌐 Testing API import simulation...")
+class TestImportAPIRequest:
+    """Test import API request validation"""
 
-    try:
-        # Test that we can import required modules
-        sys.path.insert(0, str(project_root / 'backend'))
-        from app.api.import_table import ImportTableRequest
-
-        # Load test data
-        test_data_path = project_root / "tests" / "test_payload.json"
-        with open(test_data_path, 'r', encoding='utf-8') as f:
-            test_data = json.load(f)
-
-        # Create request object
+    def test_import_request_creation(self, sample_import_data):
+        """Test creating ImportTableRequest object"""
         request = ImportTableRequest(
-            rows=test_data['rows'],
+            rows=sample_import_data["rows"],
             is_forced_update=False
         )
 
-        print("✅ API request object created successfully")
-        print(f"   Rows: {len(request.rows)}")
-        print(f"   Forced update: {request.is_forced_update}")
+        assert len(request.rows) == len(sample_import_data["rows"])
+        assert request.is_forced_update is False
 
-        return True
+    def test_import_request_with_force_update(self, sample_import_data):
+        """Test import request with forced update"""
+        request = ImportTableRequest(
+            rows=sample_import_data["rows"],
+            is_forced_update=True
+        )
 
-    except Exception as e:
-        print(f"❌ API simulation test failed: {e}")
-        return False
+        assert request.is_forced_update is True
 
+    def test_import_request_validation_empty_rows(self):
+        """Test validation with empty rows"""
+        with pytest.raises(ValueError):
+            ImportTableRequest(rows=[], is_forced_update=False)
 
-async def main():
-    """Run import tests"""
-    print("🚀 Import Functionality Tests")
-    print("=" * 50)
+    def test_import_request_validation_invalid_ratings(self, sample_import_data):
+        """Test validation with invalid ratings data"""
+        invalid_data = sample_import_data["rows"].copy()
+        invalid_data[0]["ratings"] = "invalid_ratings"  # Should be dict
 
-    tests = [
-        ("Data Structure Test", test_import_from_test_data),
-        ("API Simulation Test", test_api_import_simulation),
-    ]
-
-    results = []
-    for test_name, test_func in tests:
-        print(f"\n{'='*10} {test_name} {'='*10}")
-        success = await test_func()
-        results.append((test_name, success))
-
-    print("\n" + "=" * 50)
-    print("📊 Import Test Results:")
-
-    all_passed = True
-    for test_name, success in results:
-        status = "✅ PASSED" if success else "❌ FAILED"
-        print(f"  {test_name}: {status}")
-        if not success:
-            all_passed = False
-
-    print("\n" + "=" * 50)
-    if all_passed:
-        print("🎉 All import tests passed!")
-        print("\n💡 To test full import functionality:")
-        print("1. Start the backend server: cd backend && python wsgi.py")
-        print("2. Run: python tests/test_import.py --full")
-    else:
-        print("❌ Some import tests failed.")
-
-    return all_passed
+        with pytest.raises(ValueError):
+            ImportTableRequest(rows=invalid_data, is_forced_update=False)
 
 
-if __name__ == "__main__":
-    import sys
-    success = asyncio.run(main())
-    sys.exit(0 if success else 1)
+class TestImportIntegration:
+    """Integration tests for import functionality"""
+
+    @patch("backend.app.infrastructure.repositories.replace_all_from_table")
+    def test_import_endpoint_success(self, mock_replace, client, sample_import_data):
+        """Test successful import endpoint call"""
+        mock_replace.return_value = 2  # Mock successful import of 2 games
+
+        response = client.post(
+            "/api/import-table",
+            json={
+                "rows": sample_import_data["rows"],
+                "is_forced_update": False
+            }
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+        assert data["games_imported"] == 2
+        assert "Translation started in background" in data["message"]
+
+    def test_import_endpoint_invalid_data(self, client):
+        """Test import endpoint with invalid data"""
+        response = client.post(
+            "/api/import-table",
+            json={
+                "rows": [{"invalid": "data"}],
+                "is_forced_update": False
+            }
+        )
+
+        assert response.status_code == 400
+
+    @patch("backend.app.infrastructure.repositories.replace_all_from_table")
+    def test_import_endpoint_forced_update(self, mock_replace, client, sample_import_data):
+        """Test import with forced update flag"""
+        mock_replace.return_value = 1
+
+        response = client.post(
+            "/api/import-table",
+            json={
+                "rows": sample_import_data["rows"],
+                "is_forced_update": True
+            }
+        )
+
+        assert response.status_code == 200
+        # Verify that replace_all_from_table was called with is_forced_update=True
+        mock_replace.assert_called_once()
+        args, kwargs = mock_replace.call_args
+        assert kwargs["is_forced_update"] is True

@@ -71,3 +71,67 @@ def sample_bgg_response():
         "categories": ["Strategy"],
         "mechanics": ["Worker Placement"]
     }
+
+
+@pytest.fixture
+def mock_bgg_search_response():
+    """Mock response from BGG search API"""
+    return [
+        {"id": 167791, "name": "Terraforming Mars", "type": "boardgame"},
+        {"id": 13, "name": "Catan", "type": "boardgame"},
+        {"id": 266192, "name": "Wingspan", "type": "boardgame"},
+    ]
+
+
+@pytest.fixture
+def mock_bgg_details_response():
+    """Mock detailed response from BGG thing API"""
+    return {
+        "id": 167791,
+        "name": "Terraforming Mars",
+        "type": "boardgame",
+        "yearpublished": 2016,
+        "rank": 1,
+        "average": 8.43,
+        "bayesaverage": 8.35,
+        "usersrated": 75000,
+        "description": "In the 2400s, mankind begins to terraform the planet Mars...",
+        "categories": ["Economic", "Environmental", "Industry / Manufacturing"],
+        "mechanics": ["Card Drafting", "End Game Bonuses", "Hand Management"],
+        "designers": ["Jacob Fryxelius"],
+        "publishers": ["FryxGames", "Schwerkraft-Verlag"]
+    }
+
+
+@pytest.fixture
+def sample_import_row():
+    """Sample import data row"""
+    return {
+        "name": "Terraforming Mars",
+        "genre": "экономическая",
+        "niza_games_rank": 1,
+        "bgg_id": 167791,  # This should be ignored in new logic
+        "description_ru": "Игра о терраформировании Марса",
+        "ratings": {
+            "user1": 9,
+            "user2": 8,
+            "user3": 10
+        }
+    }
+
+
+@pytest.fixture
+def client_app():
+    """FastAPI test client fixture"""
+    from fastapi.testclient import TestClient
+    from backend.app.main import app
+
+    # Override dependencies for testing
+    from backend.app.infrastructure.db import get_db
+
+    def override_get_db():
+        # Return test database session
+        pass
+
+    app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)

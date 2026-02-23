@@ -1,82 +1,142 @@
-#!/usr/bin/env python3
 """
-Скрипт для тестирования конфигурации приложения
+Unit tests for application configuration
 """
-import os
-import sys
-from pathlib import Path
+import pytest
+from unittest.mock import patch, MagicMock
 
-# Добавляем корень проекта в sys.path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+from backend.app.config import config as backend_config
 
-def test_backend_config():
-    """Тестирование backend конфигурации"""
-    print("🔧 Тестирование backend конфигурации...")
 
-    try:
-        sys.path.insert(0, str(project_root / 'backend'))
-        from app.config import config
+class TestBackendConfig:
+    """Test backend configuration loading and validation"""
 
-        print("✅ Backend config загружен")
-        print(f"   DATABASE_URL: {config.DATABASE_URL}")
-        print(f"   DB_HOST: {config.DB_HOST}")
-        print(f"   DB_USER: {config.DB_USER}")
-        print(f"   APP_ENV: {config.APP_ENV}")
-        print(f"   DEBUG: {config.DEBUG}")
-        print(f"   DEFAULT_LANGUAGE: {config.DEFAULT_LANGUAGE}")
-        print(f"   GAME_UPDATE_DAYS: {config.GAME_UPDATE_DAYS}")
+    def test_backend_config_has_required_attributes(self):
+        """Test that backend config has all required attributes"""
+        required_attrs = [
+            'DATABASE_URL', 'DB_HOST', 'DB_USER', 'APP_ENV',
+            'DEBUG', 'DEFAULT_LANGUAGE', 'GAME_UPDATE_DAYS',
+            'BGG_REQUEST_DELAY', 'BGG_BEARER_TOKEN'
+        ]
 
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка backend config: {e}")
-        return False
+        for attr in required_attrs:
+            assert hasattr(backend_config, attr), f"Missing required config attribute: {attr}"
 
-def test_bot_config():
-    """Тестирование bot конфигурации"""
-    print("\n🤖 Тестирование bot конфигурации...")
+    def test_backend_config_game_update_days(self):
+        """Test GAME_UPDATE_DAYS configuration"""
+        assert isinstance(backend_config.GAME_UPDATE_DAYS, int)
+        assert backend_config.GAME_UPDATE_DAYS > 0
 
-    try:
-        sys.path.insert(0, str(project_root / 'bot'))
-        from config import config
+    def test_backend_config_bgg_request_delay(self):
+        """Test BGG_REQUEST_DELAY configuration"""
+        assert isinstance(backend_config.BGG_REQUEST_DELAY, (int, float))
+        assert backend_config.BGG_REQUEST_DELAY >= 0
 
-        print("✅ Bot config загружен")
-        print(f"   BOT_TOKEN: {'***' + config.BOT_TOKEN[-4:] if config.BOT_TOKEN else 'не задан'}")
-        print(f"   ADMIN_USER_ID: {config.ADMIN_USER_ID}")
-        print(f"   API_BASE_URL: {config.API_BASE_URL}")
-        print(f"   RATING_SHEET_CSV_URL: {'***' if config.RATING_SHEET_CSV_URL else 'не задан'}")
-        print(f"   DB_HOST: {config.DB_HOST}")
-        print(f"   DATABASE_URL: {config.DATABASE_URL}")
+    @patch.dict('os.environ', {'DATABASE_URL': 'postgresql://test:test@localhost:5432/test'})
+    def test_backend_config_database_url(self):
+        """Test DATABASE_URL configuration"""
+        # Reload config to pick up environment changes
+        from importlib import reload
+        import backend.app.config
+        reload(backend.app.config)
+        from backend.app.config import config as reloaded_config
 
-        # Валидация
-        try:
-            config.validate()
-            print("✅ Конфигурация прошла валидацию")
-        except ValueError as e:
-            print(f"⚠️  Валидация: {e}")
+        assert reloaded_config.DATABASE_URL is not None
+        assert 'postgresql://' in reloaded_config.DATABASE_URL
 
-        return True
-    except Exception as e:
-        print(f"❌ Ошибка bot config: {e}")
-        return False
+    def test_backend_config_debug_mode(self):
+        """Test DEBUG configuration"""
+        assert isinstance(backend_config.DEBUG, bool)
 
-def main():
-    print("🚀 Тестирование конфигурации Board Game Ranker")
-    print("=" * 50)
+    def test_backend_config_default_language(self):
+        """Test DEFAULT_LANGUAGE configuration"""
+        assert isinstance(backend_config.DEFAULT_LANGUAGE, str)
+        assert len(backend_config.DEFAULT_LANGUAGE) == 2  # ISO language code
 
-    backend_ok = test_backend_config()
-    bot_ok = test_bot_config()
 
-    print("\n" + "=" * 50)
-    if backend_ok and bot_ok:
-        print("🎉 Все конфигурации загружены успешно!")
-    else:
-        print("❌ Есть проблемы с конфигурацией")
+class TestBotConfig:
+    """Test bot configuration loading and validation"""
 
-    print("\n💡 Советы:")
-    print("- Создайте .env файл на основе env.example")
-    print("- Установите BOT_TOKEN и RATING_SHEET_CSV_URL")
-    print("- Проверьте DATABASE_URL для вашей среды")
+    @patch('bot.config.os.getenv')
+    def test_bot_config_loading(self, mock_getenv):
+        """Test bot config loading"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'BOT_TOKEN': 'test_token_123',
+            'ADMIN_USER_ID': '123456789',
+            'API_BASE_URL': 'http://localhost:8000',
+            'RATING_SHEET_CSV_URL': 'https://example.com/sheet.csv',
+            'DATABASE_URL': 'postgresql://test:test@localhost:5432/test'
+        }.get(key, default)
 
-if __name__ == "__main__":
-    main()
+        from bot.config import config as bot_config
+
+        assert bot_config.BOT_TOKEN == 'test_token_123'
+        assert bot_config.ADMIN_USER_ID == 123456789
+        assert bot_config.API_BASE_URL == 'http://localhost:8000'
+
+    @patch('bot.config.os.getenv')
+    def test_bot_config_validation_success(self, mock_getenv):
+        """Test successful config validation"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'BOT_TOKEN': 'test_token_123',
+            'ADMIN_USER_ID': '123456789',
+            'API_BASE_URL': 'http://localhost:8000',
+            'DATABASE_URL': 'postgresql://test:test@localhost:5432/test'
+        }.get(key, default)
+
+        from bot.config import config as bot_config
+
+        # Should not raise exception
+        bot_config.validate()
+
+    @patch('bot.config.os.getenv')
+    def test_bot_config_validation_missing_token(self, mock_getenv):
+        """Test config validation with missing BOT_TOKEN"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'ADMIN_USER_ID': '123456789',
+            'API_BASE_URL': 'http://localhost:8000',
+        }.get(key, default)
+
+        from bot.config import config as bot_config
+
+        with pytest.raises(ValueError, match="BOT_TOKEN не задан"):
+            bot_config.validate()
+
+    @patch('bot.config.os.getenv')
+    def test_bot_config_validation_missing_admin_id(self, mock_getenv):
+        """Test config validation with missing ADMIN_USER_ID"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'BOT_TOKEN': 'test_token_123',
+            'API_BASE_URL': 'http://localhost:8000',
+        }.get(key, default)
+
+        from bot.config import config as bot_config
+
+        with pytest.raises(ValueError, match="ADMIN_USER_ID не задан"):
+            bot_config.validate()
+
+    @patch('bot.config.os.getenv')
+    def test_bot_config_admin_user_id_type(self, mock_getenv):
+        """Test that ADMIN_USER_ID is converted to int"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'BOT_TOKEN': 'test_token_123',
+            'ADMIN_USER_ID': '123456789',
+        }.get(key, default)
+
+        from bot.config import config as bot_config
+
+        assert isinstance(bot_config.ADMIN_USER_ID, int)
+        assert bot_config.ADMIN_USER_ID == 123456789
+
+    @patch('bot.config.os.getenv')
+    def test_bot_config_token_masking(self, mock_getenv):
+        """Test that BOT_TOKEN is properly masked in string representation"""
+        mock_getenv.side_effect = lambda key, default=None: {
+            'BOT_TOKEN': 'very_long_token_123456789',
+            'ADMIN_USER_ID': '123456789',
+        }.get(key, default)
+
+        from bot.config import config as bot_config
+
+        config_str = str(bot_config)
+        assert 'very_long_token_123456789' not in config_str
+        assert '***6789' in config_str  # Last 5 characters should be visible
