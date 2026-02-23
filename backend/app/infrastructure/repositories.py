@@ -545,24 +545,22 @@ def replace_all_from_table(
                 ratings = {}
 
             # Логируем пользователей для диагностики
-            logger.warning(f"STARTING TO PROCESS RATINGS FOR GAME '{name}': {len(ratings)} users - {list(ratings.keys())}")
+            logger.info(f"STARTING TO PROCESS RATINGS FOR GAME '{name}': {len(ratings)} users - {list(ratings.keys())}")
 
             for user_name, rank in ratings.items():
                 try:
-                    print(f"DEBUG: Processing rating for user '{user_name}' (rank: {rank})")
+                    logger.debug(f"Processing rating for user '{user_name}' (rank: {rank})")
                     if not isinstance(user_name, str) or not user_name.strip():
                         continue
 
                     # Пропускаем специального пользователя "Общий" - это не настоящий пользователь
                     user_name_clean = user_name.strip().lower()
-                    print(f"DEBUG: Checking user: '{user_name}' -> '{user_name_clean}'")
+                    logger.debug(f"Checking user: '{user_name}' -> '{user_name_clean}'")
                     if 'общий' in user_name_clean or user_name_clean in ['general', 'общий рейтинг'] or user_name_clean == 'общий':
-                        print(f"DEBUG: SKIPPING special user '{user_name}' for game '{name}'")
                         logger.error(f"SKIPPING special user '{user_name}' for game '{name}' - CONDITION MET")
                         continue
                     else:
-                        print(f"DEBUG: NOT SKIPPING user '{user_name}' for game '{name}'")
-                        logger.info(f"NOT SKIPPING user '{user_name}' for game '{name}' - CONDITION NOT MET")
+                        logger.debug(f"NOT SKIPPING user '{user_name}' for game '{name}'")
 
                     # rank может быть 0 (место для будущего рейтинга) или 1-50 (оценка)
                     if not isinstance(rank, int) or rank < 0 or rank > 50:
@@ -572,7 +570,7 @@ def replace_all_from_table(
                     # Ищем пользователя по имени (предполагаем, что имя в таблице соответствует имени пользователя)
                     user = session.query(UserModel).filter(UserModel.name == user_name.strip()).first()
                     if not user:
-                        logger.info(f"User '{user_name}' not found, skipping rating for game '{name}'")
+                        logger.debug(f"User '{user_name}' not found, skipping rating for game '{name}'")
                         continue
 
                     # Проверяем, существует ли уже рейтинг для этого пользователя и игры
