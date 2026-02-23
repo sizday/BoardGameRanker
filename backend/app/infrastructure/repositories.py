@@ -215,18 +215,17 @@ def _should_update_game(game: GameModel, is_forced_update: bool) -> bool:
 
 def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
     """
-    Вспомогательная функция: по названию (и, опционально, bgg_id) получает
-    подробные данные игры из BGG.
+    Вспомогательная функция: по названию получает подробные данные игры из BGG.
 
-    Приоритет выбора кандидата:
-    1. Если в строке есть явный bgg_id — сразу дергаем get_boardgame_details.
-    2. Иначе ищем по имени через search_boardgame (exact=False), выбираем наиболее релевантный результат:
-       - Сначала точные совпадения названия
-       - Затем основные игры (boardgame) перед расширениями (boardgameexpansion)
-       - Затем по мировому рейтингу (выше рейтинг = выше приоритет)
-       - Наконец по количеству голосов (больше голосов = выше приоритет)
+    Всегда ищем по названию через search_boardgame (exact=False), выбираем наиболее релевантный результат:
+    - Сначала игры с высокой схожестью названия (fuzzy ratio > 85)
+    - Затем основные игры (boardgame) перед расширениями (boardgameexpansion)
+    - Затем по схожести названия (fuzzy ratio)
+    - Затем по мировому рейтингу (меньше число = выше)
+    - Наконец по количеству голосов (больше = лучше)
+
+    Explicit bgg_id из данных импорта игнорируется, так как часто содержит ошибки.
     """
-    explicit_bgg_id = row.get("bgg_id")
     name = row.get("name")
 
     # Всегда пытаемся найти игру в BGG
@@ -234,35 +233,8 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
         logger.debug("No name provided in row, skipping BGG fetch")
         return None
 
-    # Сначала пробуем по explicit ID, если он указан
-    if explicit_bgg_id:
-        logger.debug(f"Fetching BGG details by explicit ID: {explicit_bgg_id} for game: {name}")
-        result = get_boardgame_details(int(explicit_bgg_id))
-        time.sleep(config.BGG_REQUEST_DELAY)
-
-        if result is not None:
-            # Проверяем, что название игры из BGG соответствует ожидаемому названию
-            bgg_game_name = (result.get("name") or "").strip()
-
-            # Используем fuzzy matching для проверки схожести названий
-            if fuzz is not None:
-                name_similarity = max(
-                    fuzz.token_sort_ratio(name.strip(), bgg_game_name),
-                    fuzz.partial_ratio(name.strip().lower(), bgg_game_name.lower())
-                )
-            else:
-                name_similarity = 100 if name.strip().lower() == bgg_game_name.lower() else 0
-
-            # Если схожесть высокая (>= 70%), считаем что ID верный
-            if name_similarity >= 70:
-                logger.debug(f"BGG ID {explicit_bgg_id} validated for game '{name}' (similarity: {name_similarity}%, BGG name: '{bgg_game_name}')")
-                return result
-            else:
-                logger.warning(f"BGG ID {explicit_bgg_id} mismatch for game '{name}': BGG returned '{bgg_game_name}' (similarity: {name_similarity}%), will search by name instead")
-        else:
-            logger.warning(f"Game '{name}' not found by ID {explicit_bgg_id}, will search by name")
-
-    # Если explicit ID не указан или не найден, ищем по имени
+    # Всегда ищем по названию - это более надежно чем проверка explicit bgg_id,
+    # так как данные импорта часто содержат неправильные ID
     logger.debug(f"Searching BGG for game: {name}")
 
     logger.debug(f"Searching BGG for game: {name}")
