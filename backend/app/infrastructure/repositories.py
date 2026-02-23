@@ -241,7 +241,24 @@ def _fetch_bgg_details_for_row(row: Dict[str, Any]) -> Dict[str, Any] | None:
         time.sleep(config.BGG_REQUEST_DELAY)
 
         if result is not None:
-            return result
+            # Проверяем, что название игры из BGG соответствует ожидаемому названию
+            bgg_game_name = (result.get("name") or "").strip()
+
+            # Используем fuzzy matching для проверки схожести названий
+            if fuzz is not None:
+                name_similarity = max(
+                    fuzz.token_sort_ratio(name.strip(), bgg_game_name),
+                    fuzz.partial_ratio(name.strip().lower(), bgg_game_name.lower())
+                )
+            else:
+                name_similarity = 100 if name.strip().lower() == bgg_game_name.lower() else 0
+
+            # Если схожесть высокая (>= 70%), считаем что ID верный
+            if name_similarity >= 70:
+                logger.debug(f"BGG ID {explicit_bgg_id} validated for game '{name}' (similarity: {name_similarity}%, BGG name: '{bgg_game_name}')")
+                return result
+            else:
+                logger.warning(f"BGG ID {explicit_bgg_id} mismatch for game '{name}': BGG returned '{bgg_game_name}' (similarity: {name_similarity}%), will search by name instead")
         else:
             logger.warning(f"Game '{name}' not found by ID {explicit_bgg_id}, will search by name")
 
