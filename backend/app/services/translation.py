@@ -204,6 +204,12 @@ class TranslationService:
             # Переводим описания по одному (чтобы не перегружать API)
             for i, game in enumerate(games_to_translate, 1):
                 try:
+                    # Проверяем, не был ли перевод уже сделан другим процессом
+                    db.refresh(game)  # Обновляем объект из базы данных
+                    if game.description_ru is not None:
+                        logger.debug(f"⏭️  [{i}/{total_games}] Skipping {game.name} - already translated by another process")
+                        continue
+
                     logger.info(f"📖 [{i}/{total_games}] Translating game: {game.name} (ID: {game.id})")
 
                     # Используем retry-логику с увеличенными задержками

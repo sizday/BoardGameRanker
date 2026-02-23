@@ -217,7 +217,7 @@ async def _process_sheet_data(api_base_url: str, rows: List[List[str]], progress
 
     # Отправляем данные в backend с повторными попытками
     logger.info(f"Sending {len(data_rows)} games to backend API")
-    max_retries = 3
+    max_retries = 1
     for attempt in range(max_retries):
         try:
             logger.info(f"Sending data to backend (attempt {attempt + 1}/{max_retries})")
