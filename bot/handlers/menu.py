@@ -10,7 +10,7 @@ from config import config
 
 # Импортируем функции из других хендлеров для прямого вызова
 from .login import cmd_login
-from .my_games import cmd_my_games
+from .my_games import _cmd_my_games_impl
 from .ranking import cmd_start_ranking
 
 # Импортируем FSMContext для работы с состояниями
@@ -121,7 +121,12 @@ async def handle_menu_callbacks(
 
         elif action == "my_games":
             # Вызываем функцию просмотра игр напрямую
-            await cmd_my_games(callback.message, api_base_url)
+            await _cmd_my_games_impl(
+                user_id=user_id,
+                user_name=user_name,
+                answer_func=callback.message.answer,
+                api_base_url=api_base_url
+            )
 
         elif action == "start_ranking":
             # Вызываем функцию начала ранжирования напрямую

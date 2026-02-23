@@ -68,7 +68,6 @@ def get_user_games_with_bgg_links(session: Session, user_id: str) -> List[Dict[s
         .join(RatingModel)
         .filter(
             RatingModel.user_id == UUID(user_id),
-            RatingModel.rank > 0,  # Только игры с оценками (не 0)
             GameModel.bgg_id.isnot(None)  # Только игры с BGG ID
         )
         .order_by(GameModel.name)  # Лексикографическая сортировка
