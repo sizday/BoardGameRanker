@@ -562,7 +562,7 @@ def replace_all_from_table(
                         continue
                     else:
                         print(f"DEBUG: NOT SKIPPING user '{user_name}' for game '{name}'")
-                        logger.warning(f"NOT SKIPPING user '{user_name}' for game '{name}' - CONDITION NOT MET")
+                        logger.info(f"NOT SKIPPING user '{user_name}' for game '{name}' - CONDITION NOT MET")
 
                     # rank может быть 0 (место для будущего рейтинга) или 1-50 (оценка)
                     if not isinstance(rank, int) or rank < 0 or rank > 50:
@@ -572,7 +572,7 @@ def replace_all_from_table(
                     # Ищем пользователя по имени (предполагаем, что имя в таблице соответствует имени пользователя)
                     user = session.query(UserModel).filter(UserModel.name == user_name.strip()).first()
                     if not user:
-                        logger.warning(f"User '{user_name}' not found, skipping rating for game '{name}'")
+                        logger.info(f"User '{user_name}' not found, skipping rating for game '{name}'")
                         continue
 
                     # Проверяем, существует ли уже рейтинг для этого пользователя и игры

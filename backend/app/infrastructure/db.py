@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = config.DATABASE_URL
 
 logger.info(f"Initializing database connection: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else '***'}")
-engine = create_engine(DATABASE_URL, echo=config.DEBUG, future=True)
+engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 Base = declarative_base()

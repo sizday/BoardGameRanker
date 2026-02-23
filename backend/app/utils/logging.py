@@ -44,7 +44,13 @@ def setup_logging(log_level: Optional[str] = None) -> None:
     # Настройка уровней для внешних библиотек
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
+    # Полностью отключаем логирование SQLAlchemy
+    logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.orm").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+
     logging.getLogger("httpx").setLevel(logging.WARNING)
     
     # Настройка уровней для наших модулей

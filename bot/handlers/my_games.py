@@ -29,7 +29,7 @@ async def cmd_my_games(message: Message, api_base_url: str) -> None:
             # Проверяем, зарегистрирован ли пользователь
             user_response = await client.get(
                 f"{api_base_url}/api/users/{user_id}/games",
-                timeout=10.0
+                timeout=30.0  # Увеличиваем таймаут до 30 секунд
             )
             user_response.raise_for_status()
 
