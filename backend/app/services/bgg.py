@@ -272,8 +272,25 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
 
     game_id = item.attrib.get("id")
     game_type = item.attrib.get("type")  # boardgame, boardgameexpansion, etc.
-    name_el = item.find("name")
-    name = name_el.attrib.get("value") if name_el is not None else None
+
+    # Находим основное название и русское название
+    primary_name = None
+    russian_name = None
+
+    for name_el in item.findall("name"):
+        name_type = name_el.attrib.get("type", "primary")
+        name_value = name_el.attrib.get("value")
+
+        if name_type == "primary":
+            primary_name = name_value
+        elif name_type == "alternate" and name_value:
+            # Проверяем, содержит ли название русские символы
+            if any('\u0400' <= char <= '\u04FF' for char in name_value):
+                russian_name = name_value
+                break  # Берем первое найденное русское название
+
+    # Используем русское название, если найдено, иначе основное
+    name = russian_name or primary_name
 
     year_el = item.find("yearpublished")
     year = year_el.attrib.get("value") if year_el is not None else None
@@ -356,7 +373,8 @@ def _parse_thing_response(xml_text: str) -> Dict[str, Any]:
 
     return {
         "id": _to_int(game_id),
-        "name": name,
+        "name": primary_name,  # Основное (английское) название
+        "name_ru": russian_name,  # Русское название, если найдено
         "type": game_type,  # Добавляем тип игры
         "yearpublished": _to_int(year),
         "minplayers": _to_int(minplayers_el.attrib.get("value") if minplayers_el is not None else None),

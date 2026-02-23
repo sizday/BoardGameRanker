@@ -123,14 +123,21 @@ def save_game_from_bgg_data(
 
     if game is None:
         # Создаем новую игру
-        # Используем пользовательский запрос как название, если он предоставлен,
-        # чтобы сохранить русский язык или оригинальное название
-        game_name = user_query if user_query else name
+        # Приоритет названий: русское из BGG > пользовательский запрос > английское из BGG
+        bgg_russian_name = bgg_data.get("name_ru")
+        if bgg_russian_name:
+            game_name = bgg_russian_name
+            logger.info(f"Using Russian name from BGG: '{game_name}'")
+        elif user_query:
+            game_name = user_query
+            logger.info(f"Using user query: '{game_name}'")
+        else:
+            game_name = name
+            logger.info(f"Using English name from BGG: '{game_name}'")
+
         game = GameModel(name=game_name)
         session.add(game)
         logger.info(f"Created new game from BGG data: {game_name} (bgg_id: {game_id})")
-        if user_query and user_query != name:
-            logger.info(f"Used user query '{user_query}' instead of BGG name '{name}'")
 
     # Обновляем все поля данными из BGG
     game.bgg_id = game_id

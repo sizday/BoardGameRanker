@@ -89,9 +89,14 @@ async def _search_game_impl(
                             save_resp = await client.post(
                                 f"{api_base_url}/api/games/save-from-bgg",
                                 json=game_data,
-                                timeout=10.0,
+                                timeout=15.0,  # Увеличиваем таймаут для перевода
                             )
                             save_resp.raise_for_status()
+                            saved_game_data = save_resp.json()
+
+                            # Обновляем локальные данные игры данными из базы (с переводом)
+                            game.update(saved_game_data)
+                            logger.info(f"Game saved with translation: {game.get('description_ru') is not None}")
                     except Exception as save_exc:
                         logger.warning(f"Failed to save game to database: {save_exc}")
                         # Продолжаем работу, даже если сохранение не удалось
@@ -149,8 +154,9 @@ async def _search_game_impl(
         return
 
     # Извлекаем данные игры (работает для обоих источников)
-    name = game.get("name") or "Без названия"
-    bgg_id = game.get("bgg_id")
+    # Приоритет: русское название из BGG > английское название
+    name = game.get("name_ru") or game.get("name") or "Без названия"
+    bgg_id = game.get("bgg_id") or game.get("id")
     year = game.get("yearpublished")
     minplayers = game.get("minplayers")
     maxplayers = game.get("maxplayers")
@@ -172,6 +178,10 @@ async def _search_game_impl(
         description_ru = game.get("description_ru")
         if description_ru:
             description = description_ru
+        else:
+            # Если русского описания нет, добавляем пометку к английскому
+            if description:
+                description = f"🇬🇧 {description}\n\n<i>Русское описание появится после автоматического перевода</i>"
 
     logger.info(f"📖 Displaying game '{name}' from {search_source} (rank: #{rank})")
 

@@ -14,6 +14,7 @@ router = APIRouter()
 class BGGGameDetails(BaseModel):
     id: int | None
     name: str | None
+    name_ru: str | None = None
     yearpublished: int | None
     minplayers: int | None = None
     maxplayers: int | None = None
