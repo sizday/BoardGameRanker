@@ -179,10 +179,13 @@ async def save_game_from_bgg(
     """
     game_name = bgg_data.get('name', 'Unknown')
     game_id = bgg_data.get('id')
+    user_query = bgg_data.get('user_query')
     logger.info(f"💾 Saving game from BGG data: '{game_name}' (BGG ID: {game_id})")
+    if user_query:
+        logger.info(f"💾 User query provided: '{user_query}'")
 
     try:
-        game = save_game_from_bgg_data(db, bgg_data)
+        game = save_game_from_bgg_data(db, bgg_data, user_query)
         db.commit()
 
         logger.info(f"✅ Game saved successfully: '{game_name}' (DB ID: {game.id})")

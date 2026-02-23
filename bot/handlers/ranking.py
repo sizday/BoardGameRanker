@@ -20,6 +20,10 @@ async def _handle_phase_transition(
     session_id: int,
 ) -> None:
     """Обрабатывает переходы между состояниями на основе phase из API ответа."""
+
+    # Сохраняем message_id текущего сообщения для будущих редактирований
+    await state.update_data({"ranking_message_id": callback.message.message_id})
+    """Обрабатывает переходы между состояниями на основе phase из API ответа."""
     phase = payload.get("phase")
 
     if phase == "first_tier":
@@ -35,24 +39,47 @@ async def _handle_phase_transition(
             f"Игра: <b>{game['name']}</b>{year_text}{usersrated_text}{bgg_text}\n"
             f"Отметь, насколько она тебе понравилась."
         )
-        thumbnail = game.get("thumbnail")
-        if thumbnail:
-            await callback.message.answer_photo(
-                photo=thumbnail,
-                caption=text,
-                reply_markup=_first_tier_keyboard(
-                    session_id=session_id,
-                    game_id=game["id"],
-                ),
-            )
-        else:
-            await callback.message.answer(
-                text,
-                reply_markup=_first_tier_keyboard(
-                    session_id=session_id,
-                    game_id=game["id"],
-                ),
-            )
+
+        # Пытаемся отредактировать существующее сообщение
+        try:
+            thumbnail = game.get("thumbnail")
+            if thumbnail:
+                # Для изображений редактируем caption и reply_markup
+                await callback.message.edit_caption(
+                    caption=text,
+                    reply_markup=_first_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+            else:
+                await callback.message.edit_text(
+                    text=text,
+                    reply_markup=_first_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+        except Exception as exc:
+            # Неудачное редактирование - нормально
+            # Если не удалось отредактировать, отправляем новое сообщение
+            if thumbnail:
+                await callback.message.answer_photo(
+                    photo=thumbnail,
+                    caption=text,
+                    reply_markup=_first_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+            else:
+                await callback.message.answer(
+                    text,
+                    reply_markup=_first_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
     elif phase == "second_tier":
         await state.set_state(RankingStates.second_tier)
         game = payload["next_game"]
@@ -67,24 +94,47 @@ async def _handle_phase_transition(
             f"Игра: <b>{game['name']}</b>{year_text}{usersrated_text}{bgg_text}\n"
             f"Выбери, насколько она крутая."
         )
-        thumbnail = game.get("thumbnail")
-        if thumbnail:
-            await callback.message.answer_photo(
-                photo=thumbnail,
-                caption=text,
-                reply_markup=_second_tier_keyboard(
-                    session_id=session_id,
-                    game_id=game["id"],
-                ),
-            )
-        else:
-            await callback.message.answer(
-                text,
-                reply_markup=_second_tier_keyboard(
-                    session_id=session_id,
-                    game_id=game["id"],
-                ),
-            )
+
+        # Пытаемся отредактировать существующее сообщение
+        try:
+            thumbnail = game.get("thumbnail")
+            if thumbnail:
+                # Для изображений редактируем caption и reply_markup
+                await callback.message.edit_caption(
+                    caption=text,
+                    reply_markup=_second_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+            else:
+                await callback.message.edit_text(
+                    text=text,
+                    reply_markup=_second_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+        except Exception as exc:
+            # Неудачное редактирование - нормально
+            # Если не удалось отредактировать, отправляем новое сообщение
+            if thumbnail:
+                await callback.message.answer_photo(
+                    photo=thumbnail,
+                    caption=text,
+                    reply_markup=_second_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
+            else:
+                await callback.message.answer(
+                    text,
+                    reply_markup=_second_tier_keyboard(
+                        session_id=session_id,
+                        game_id=game["id"],
+                    ),
+                )
     elif phase == "final":
         await state.set_state(RankingStates.final)
         top = payload.get("top", [])
@@ -100,10 +150,26 @@ async def _handle_phase_transition(
             else:
                 lines.append(f"{rank}. {name}{year_text}")
         text = "Твой предварительный топ-50:\n\n" + "\n".join(lines)
-        await callback.message.edit_text(text)
+
+        # Добавляем кнопку возврата в меню
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Вернуться в меню", callback_data="menu_back_to_main")]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=back_keyboard)
+
     elif phase == "completed":
         await state.set_state(RankingStates.completed)
-        await callback.message.edit_text(payload.get("message", "Готово."))
+        text = payload.get("message", "Готово.")
+
+        # Добавляем кнопку возврата в меню
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        back_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Вернуться в меню", callback_data="menu_back_to_main")]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=back_keyboard)
 
 
 class RankingStates(StatesGroup):
@@ -215,10 +281,23 @@ async def _send_first_tier_question(
 
 
 @router.message(Command("start_ranking"))
-async def cmd_start_ranking(message: Message, state: FSMContext):
-    api_base_url = message.bot["api_base_url"]
-    user_name = message.from_user.full_name or str(message.from_user.id)
-    user_id = message.from_user.id
+async def cmd_start_ranking(message_or_callback, state: FSMContext):
+    """
+    Начинает процесс ранжирования.
+    Может принимать как Message, так и CallbackQuery.
+    """
+    if hasattr(message_or_callback, 'bot'):
+        # Это Message
+        api_base_url = message_or_callback.bot["api_base_url"]
+        user_name = message_or_callback.from_user.full_name or str(message_or_callback.from_user.id)
+        user_id = message_or_callback.from_user.id
+        message = message_or_callback
+    else:
+        # Это CallbackQuery
+        api_base_url = message_or_callback.bot["api_base_url"]
+        user_name = message_or_callback.from_user.full_name or str(message_or_callback.from_user.id)
+        user_id = message_or_callback.from_user.id
+        message = message_or_callback.message
 
     logger.info(f"User {user_name} (ID: {user_id}) requested ranking start")
 

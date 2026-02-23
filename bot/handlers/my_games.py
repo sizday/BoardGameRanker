@@ -66,22 +66,28 @@ async def _cmd_my_games_impl(user_id: int, user_name: str, answer_func, api_base
             # Разбиваем на части, если сообщение слишком длинное
             text = "\n".join(lines)
             if len(text) > 4000:  # Ограничение Telegram
-                # Разбиваем на части по максимальному количеству игр, входящих в 4000 символов
+                # Разбиваем на части, гарантируя целостность каждой строки с ссылкой
                 parts = []
                 current_part = []
                 current_length = 0
 
-                for line in lines:
+                # Заголовок всегда идет первым
+                header = lines[0]
+                current_part.append(header)
+                current_length = len(header) + 1
+
+                for line in lines[1:]:  # Пропускаем заголовок
                     line_length = len(line) + 1  # +1 для символа новой строки
 
-                    # Если добавление этой строки превысит лимит, сохраняем текущую часть
-                    if current_length + line_length > 4000 and current_part:
+                    # Каждая строка с игрой должна быть цельной (содержит полную ссылку)
+                    # Если добавление превысит лимит, сохраняем текущую часть
+                    if current_length + line_length > 4000:
                         parts.append("\n".join(current_part))
-                        current_part = []
-                        current_length = 0
-
-                    current_part.append(line)
-                    current_length += line_length
+                        current_part = [header, line]  # Начинаем новую часть с заголовка
+                        current_length = len(header) + 1 + line_length
+                    else:
+                        current_part.append(line)
+                        current_length += line_length
 
                 # Добавляем последнюю часть, если она не пустая
                 if current_part:

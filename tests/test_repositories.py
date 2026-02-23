@@ -35,6 +35,23 @@ class TestGameRepository:
         assert saved_game is not None
         assert saved_game.name == "Test Game"
 
+    def test_save_game_from_bgg_data_with_user_query(self, test_db, sample_bgg_response):
+        """Test saving a new game from BGG data with user query preserving original name"""
+        # Act - pass user query different from BGG name
+        user_query = "Моя любимая игра"
+        game = save_game_from_bgg_data(test_db, sample_bgg_response, user_query)
+
+        # Assert
+        assert game.id is not None
+        assert game.name == "Моя любимая игра"  # Should use user query, not BGG name
+        assert game.bgg_id == 12345
+        assert game.bgg_rank == 100
+
+        # Verify game was saved to database with user query name
+        saved_game = test_db.query(GameModel).filter(GameModel.bgg_id == 12345).first()
+        assert saved_game is not None
+        assert saved_game.name == "Моя любимая игра"
+
     def test_save_game_from_bgg_data_existing_game(self, test_db, sample_bgg_response):
         """Test updating an existing game from BGG data"""
         # Arrange - create existing game

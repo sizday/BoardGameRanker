@@ -91,6 +91,7 @@ def get_user_games_with_bgg_links(session: Session, user_id: str) -> List[Dict[s
 def save_game_from_bgg_data(
     session: Session,
     bgg_data: Dict[str, Any],
+    user_query: str | None = None,
 ) -> GameModel:
     """
     Сохраняет или обновляет игру в БД на основе данных из BGG API.
@@ -122,9 +123,14 @@ def save_game_from_bgg_data(
 
     if game is None:
         # Создаем новую игру
-        game = GameModel(name=name)
+        # Используем пользовательский запрос как название, если он предоставлен,
+        # чтобы сохранить русский язык или оригинальное название
+        game_name = user_query if user_query else name
+        game = GameModel(name=game_name)
         session.add(game)
-        logger.info(f"Created new game from BGG data: {name} (bgg_id: {game_id})")
+        logger.info(f"Created new game from BGG data: {game_name} (bgg_id: {game_id})")
+        if user_query and user_query != name:
+            logger.info(f"Used user query '{user_query}' instead of BGG name '{name}'")
 
     # Обновляем все поля данными из BGG
     game.bgg_id = game_id
