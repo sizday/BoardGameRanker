@@ -2,6 +2,7 @@
 Утилиты для настройки логирования в приложении.
 """
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -11,11 +12,20 @@ from app.config import config
 def setup_logging(log_level: Optional[str] = None) -> None:
     """
     Настраивает логирование для всего приложения.
-    
+
     :param log_level: Уровень логирования (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-                     Если не указан, используется из конфигурации.
+                     Если не указан, используется из конфигурации или переменной окружения LOG_LEVEL.
     """
-    level = log_level or (logging.DEBUG if config.DEBUG else logging.INFO)
+    if log_level:
+        level = getattr(logging, log_level.upper(), logging.INFO)
+    else:
+        # Сначала проверяем переменную окружения LOG_LEVEL
+        env_log_level = os.getenv("LOG_LEVEL", "").upper()
+        if env_log_level and hasattr(logging, env_log_level):
+            level = getattr(logging, env_log_level)
+        else:
+            # Fallback к старой логике
+            level = logging.DEBUG if config.DEBUG else logging.INFO
     
     # Формат логов
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
